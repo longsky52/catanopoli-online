@@ -1,0 +1,3124 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Catanopoli - Edizione Lusso (Multigiocatore & Chat Vocale)</title>
+
+    <style>
+      :root {
+        --board-bg: #141b29;
+        --tile-bg: #fdf5e6; /* Crema molto più luminoso per far risaltare il testo */
+        --border-color: #d4af37; /* Oro brillante ed esplosivo */
+        --text-color: #000000; /* Nero puro per contrasto netto */
+        --app-bg: #0f121a;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "Georgia", serif;
+        user-select: none;
+      }
+      body {
+        background-color: var(--app-bg);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        color: white;
+      }
+
+      /* MENU E POPUP */
+      .menu-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: radial-gradient(
+          circle at 50% 0%,
+          #2a3b5c 0%,
+          var(--app-bg) 70%
+        );
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        overflow-y: auto;
+      }
+      .menu-logo {
+        max-width: 200px;
+        margin-bottom: 20px;
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+      }
+      .input-group {
+        width: 100%;
+        max-width: 300px;
+        margin-bottom: 12px;
+        text-align: left;
+      }
+      .input-group label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--border-color);
+        margin-bottom: 4px;
+        font-weight: bold;
+      }
+      .input-group input,
+      .input-group select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: #0f121a;
+        color: white;
+        font-size: 1rem;
+      }
+
+      .btn {
+        padding: 12px;
+        background: linear-gradient(135deg, #c99c51, #e3c482, #c99c51);
+        color: var(--app-bg);
+        border: 2px solid #8c6830;
+        font-weight: bold;
+        font-size: 0.95rem;
+        border-radius: 8px;
+        cursor: pointer;
+        text-transform: uppercase;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        transition: transform 0.1s;
+      }
+      .btn:active {
+        transform: translateY(2px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      }
+      .btn.secondary {
+        background: rgba(20, 27, 41, 0.8);
+        color: var(--border-color);
+        border: 2px solid var(--border-color);
+        box-shadow: none;
+        padding: 10px;
+        font-size: 0.85rem;
+      }
+      .btn:disabled {
+        filter: grayscale(100%);
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-exit {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 60;
+        background: #bd2a2a;
+        color: white;
+        border: 2px solid white;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-overlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 200;
+        justify-content: center;
+        align-items: center;
+        padding: 15px;
+      }
+      .modal-content {
+        background: rgba(20, 27, 41, 0.95);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 20px;
+        width: 100%;
+        max-width: 550px;
+        max-height: 90vh;
+        overflow-y: auto;
+        color: var(--tile-bg);
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+      }
+      .modal-content h3 {
+        color: #c99c51;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #c99c51;
+        padding-bottom: 10px;
+      }
+
+      /* LAYOUT SCAMBI E MINI-CARTE */
+      .trade-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        align-content: flex-start;
+        max-height: 220px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid #555;
+        margin-bottom: 10px;
+        min-height: 120px;
+      }
+      .mini-card-wrapper {
+        cursor: pointer;
+        position: relative;
+        display: inline-block;
+      }
+      .mini-card-wrapper input[type="checkbox"] {
+        position: absolute;
+        top: 22px;
+        right: 6px;
+        transform: scale(1.3);
+        z-index: 10;
+        cursor: pointer;
+      }
+      .mini-card {
+        width: 75px;
+        height: 105px;
+        background: var(--tile-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        color: var(--text-color);
+        font-size: 0.55rem;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+      }
+      .mini-card b {
+        line-height: 1.1;
+        margin-top: 2px;
+      }
+
+      /* AREA DI GIOCO */
+      #game-ui {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        width: 100%;
+        padding: 10px;
+        position: relative;
+      }
+      .tokens-container {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: calc(100% - 4px);
+        height: calc(100% - 4px);
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 2px;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .player-token {
+        width: clamp(16px, 3.5vmin, 26px);
+        height: clamp(16px, 3.5vmin, 26px);
+        border-radius: 50%;
+        border: 1.5px solid white;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.8);
+        transition: all 0.3s;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: clamp(10px, 2.2vmin, 16px);
+        text-shadow: 0 0 3px rgba(0,0,0,0.9);
+      }
+
+      /* TABELLONE */
+      #game-wrapper {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+      }
+      .board {
+        width: min(95vw, calc(100vh - 160px));
+        max-width: 900px;
+        aspect-ratio: 1 / 1;
+        background-color: var(--board-bg);
+        border: 3px solid var(--border-color);
+        display: grid;
+        /* Ritorno alla simmetria perfetta: 11 quadrati tutti identici per lato! */
+        grid-template-columns: repeat(11, 1fr);
+        grid-template-rows: repeat(11, 1fr);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+        border-radius: 4px;
+        position: relative;
+      }
+      .tile {
+        background-color: var(--tile-bg);
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        font-size: clamp(0.2rem, 0.9vmin, 0.75rem);
+        text-align: center;
+        color: var(--text-color);
+        font-weight: bold;
+        padding: 1px;
+        overflow: hidden;
+        position: relative;
+      }
+      .tile-header {
+        width: 100%;
+        height: clamp(4px, 1.5vmin, 15px);
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 2px;
+      }
+      .price-tag {
+        font-size: clamp(0.2rem, 0.7vmin, 0.55rem);
+        color: #4a4a4a;
+        margin-top: auto;
+        padding-bottom: 2px;
+        font-weight: normal;
+      }
+      .property-badge {
+        position: absolute;
+        bottom: 12px;
+        right: 2px;
+        font-size: clamp(0.3rem, 1vmin, 0.6rem);
+        background: rgba(0, 0, 0, 0.85);
+        padding: 2px 4px;
+        border-radius: 4px;
+        display: flex;
+        gap: 1px;
+      }
+
+      .c-marrone {
+        background-color: #8B4513; /* Marrone cuoio intenso */
+      }
+      .c-celeste {
+        background-color: #00BFFF; /* Azzurro cielo accesissimo */
+      }
+      .c-viola {
+        background-color: #D81B60; /* Fucsia/Viola vibrante */
+      }
+      .c-arancio {
+        background-color: #FF7F00; /* Arancio puro e saturo */
+      }
+      .c-rosso {
+        background-color: #E60000; /* Rosso sangue fortissimo */
+      }
+      .c-giallo {
+        background-color: #FFD700; /* Giallo Oro sparato */
+      }
+      .c-verde {
+        background-color: #00AA00; /* Verde prato luminoso */
+      }
+      .c-blu {
+        background-color: #0055CC; /* Blu reale profondo ma acceso */
+      }
+
+      #tile-0 {
+        grid-area: 11 / 11;
+      }
+      #tile-1 {
+        grid-area: 11 / 10;
+      }
+      #tile-2 {
+        grid-area: 11 / 9;
+      }
+      #tile-3 {
+        grid-area: 11 / 8;
+      }
+      #tile-4 {
+        grid-area: 11 / 7;
+      }
+      #tile-5 {
+        grid-area: 11 / 6;
+      }
+      #tile-6 {
+        grid-area: 11 / 5;
+      }
+      #tile-7 {
+        grid-area: 11 / 4;
+      }
+      #tile-8 {
+        grid-area: 11 / 3;
+      }
+      #tile-9 {
+        grid-area: 11 / 2;
+      }
+      #tile-10 {
+        grid-area: 11 / 1;
+      }
+      #tile-11 {
+        grid-area: 10 / 1;
+      }
+      #tile-12 {
+        grid-area: 9 / 1;
+      }
+      #tile-13 {
+        grid-area: 8 / 1;
+      }
+      #tile-14 {
+        grid-area: 7 / 1;
+      }
+      #tile-15 {
+        grid-area: 6 / 1;
+      }
+      #tile-16 {
+        grid-area: 5 / 1;
+      }
+      #tile-17 {
+        grid-area: 4 / 1;
+      }
+      #tile-18 {
+        grid-area: 3 / 1;
+      }
+      #tile-19 {
+        grid-area: 2 / 1;
+      }
+      #tile-20 {
+        grid-area: 1 / 1;
+      }
+      #tile-21 {
+        grid-area: 1 / 2;
+      }
+      #tile-22 {
+        grid-area: 1 / 3;
+      }
+      #tile-23 {
+        grid-area: 1 / 4;
+      }
+      #tile-24 {
+        grid-area: 1 / 5;
+      }
+      #tile-25 {
+        grid-area: 1 / 6;
+      }
+      #tile-26 {
+        grid-area: 1 / 7;
+      }
+      #tile-27 {
+        grid-area: 1 / 8;
+      }
+      #tile-28 {
+        grid-area: 1 / 9;
+      }
+      #tile-29 {
+        grid-area: 1 / 10;
+      }
+      #tile-30 {
+        grid-area: 1 / 11;
+      }
+      #tile-31 {
+        grid-area: 2 / 11;
+      }
+      #tile-32 {
+        grid-area: 3 / 11;
+      }
+      #tile-33 {
+        grid-area: 4 / 11;
+      }
+      #tile-34 {
+        grid-area: 5 / 11;
+      }
+      #tile-35 {
+        grid-area: 6 / 11;
+      }
+      #tile-36 {
+        grid-area: 7 / 11;
+      }
+      #tile-37 {
+        grid-area: 8 / 11;
+      }
+      #tile-38 {
+        grid-area: 9 / 11;
+      }
+      #tile-39 {
+        grid-area: 10 / 11;
+      }
+
+      .center-board {
+        grid-area: 2 / 2 / 11 / 11;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+      }
+      .center-board img {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: 1;
+      }
+      #dice-result {
+        position: absolute;
+        bottom: 8%;
+        color: var(--tile-bg);
+        font-size: clamp(1.2rem, 3.5vmin, 2.5rem);
+        text-shadow: 0 4px 15px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 1);
+        z-index: 5;
+      }
+      .rolling-dice {
+        display: inline-block;
+        animation: dice-shake 0.15s infinite;
+        letter-spacing: 5px;
+      }
+      @keyframes dice-shake {
+        0% {
+          transform: translateY(0px) rotate(0deg);
+        }
+        25% {
+          transform: translateY(-3px) rotate(-15deg);
+        }
+        50% {
+          transform: translateY(0px) rotate(0deg);
+        }
+        75% {
+          transform: translateY(3px) rotate(15deg);
+        }
+        100% {
+          transform: translateY(0px) rotate(0deg);
+        }
+      }
+
+      /* CONSOLE */
+      .bottom-hud {
+        width: min(95vw, calc(100vh - 160px));
+        max-width: 900px;
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #game-log {
+        background: rgba(20, 27, 41, 0.85);
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px;
+        text-align: center;
+        color: var(--tile-bg);
+        font-size: 0.95rem;
+        font-weight: bold;
+        width: 100%;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .action-row {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        gap: 10px;
+      }
+      .action-left,
+      .action-right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .action-row .btn {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 55px;
+      }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  </head>
+  <body>
+    <div id="audio-container" style="display: none"></div>
+
+    <!-- MENU SETUP -->
+    <div id="main-menu" class="menu-screen">
+      <img
+        src="logo-catanopoli.png"
+        alt="Logo"
+        class="menu-logo"
+        id="menu-logo-img"
+      />
+      <div class="input-group">
+        <label>IL TUO NOME IN GIOCO:</label>
+        <input
+          type="text"
+          id="setup-name"
+          value=""
+          placeholder="Inserisci nome"
+        />
+      </div>
+      <div class="input-group">
+        <label>SOLDI INIZIALI:</label>
+        <select id="setup-money">
+          <option value="1500">1500€ (Classico)</option>
+          <option value="2500">2500€ (Ricco)</option>
+          <option value="5000">5000€ (Sceicco)</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>SCEGLI LA TUA PEDINA:</label>
+        <select id="setup-token" style="font-size: 1.2rem; text-align: center;">
+          <option value="🐘">🐘 Liotru</option>
+          <option value="🍊">🍊 Arancino</option>
+          <option value="🛵">🛵 Motorino</option>
+          <option value="🍧">🍧 Granita</option>
+          <option value="🌋">🌋 Vulcano</option>
+          <option value="⚽">⚽ Pallone</option>
+          <option value="🚓">🚓 Pantera</option>
+        </select>
+      </div>
+      <button
+        class="btn"
+        style="max-width: 300px; margin-top: 10px"
+        onclick="showSetup('single')"
+      >
+        SINGLE PLAYER (VS BOT)
+      </button>
+      <button
+        class="btn"
+        style="max-width: 300px; margin-top: 10px"
+        onclick="showSetup('multi')"
+      >
+        MULTIPLAYER ONLINE
+      </button>
+
+      <!-- SEZIONE SOCIAL E AGENZIA (MENU) -->
+      <div style="margin-top: 25px; text-align: center; font-size: 0.8rem; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); width: 100%; max-width: 320px;">
+        <h4 style="color: #c99c51; margin-bottom: 10px;">Sviluppato da DonLucio 👑</h4>
+        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
+          <a href="https://www.tiktok.com/@xxdonemusaxx?_r=1&_t=ZN-98azXsac5zi" target="_blank" class="btn secondary" style="flex: 1; padding: 6px; font-size: 0.75rem; text-decoration: none; color: white;">🎵 TikTok</a>
+        </div>
+        <p style="margin-bottom: 8px; line-height: 1.4; color: #ccc;">Se vuoi iniziare a fare live su TikTok e non hai un'agenzia clicca qui:</p>
+        <a href="https://www.tiktok.com/t/ZMBmQArq8/" target="_blank" class="btn" style="text-decoration: none; padding: 8px; font-size: 0.85rem; background: #2c4a8a; color: white; border-color: #1a2a5a;">🚀 TOTALITY LIVE AGENCY</a>
+      </div>
+    </div>
+
+    <div id="bot-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 20px">
+        Impostazioni Bot
+      </h2>
+      <div class="input-group">
+        <label>NUMERO DI AVVERSARI:</label>
+        <select id="setup-bots-count">
+          <option value="1">1 Bot</option>
+          <option value="2" selected>2 Bot</option>
+          <option value="3">3 Bot</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>DIFFICOLTÀ IA:</label>
+        <select id="setup-bots-diff">
+          <option value="facile">Principiante (Compra a caso)</option>
+          <option value="medio" selected>Intermedio (Ragiona)</option>
+          <option value="difficile">Squalo (Compra tutto)</option>
+        </select>
+      </div>
+      <button
+        class="btn"
+        style="max-width: 300px; margin-top: 20px"
+        onclick="startGame('single')"
+      >
+        AVVIA PARTITA
+      </button>
+      <button
+        class="btn secondary"
+        style="max-width: 300px; margin-top: 10px"
+        onclick="goBackMenu()"
+      >
+        INDIETRO
+      </button>
+    </div>
+
+    <!-- MENU MULTIPLAYER: CREA O SCEGLI STANZA -->
+    <div id="multi-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 15px">
+        Lobby Multiplayer
+      </h2>
+
+      <div
+        style="
+          display: flex;
+          gap: 10px;
+          width: 100%;
+          max-width: 320px;
+          margin-bottom: 15px;
+        "
+      >
+        <button
+          class="btn"
+          style="font-size: 0.8rem; padding: 8px"
+          onclick="mostraCreaStanza()"
+        >
+          CREA NUOVA
+        </button>
+        <button
+          class="btn secondary"
+          style="font-size: 0.8rem; padding: 8px"
+          onclick="mostraListaStanze()"
+        >
+          UNISCITI
+        </button>
+      </div>
+
+      <!-- SEZIONE CREA STANZA -->
+      <div id="box-crea-stanza" style="width: 100%; max-width: 300px">
+        <div class="input-group">
+          <label>NOME DELLA TUA STANZA:</label>
+          <input
+            type="text"
+            id="create-room-name"
+            value="Inserisci Nome Stanza"
+          />
+        </div>
+        <div class="input-group">
+          <label>PASSWORD (FACOLTATIVA):</label>
+          <input
+            type="password"
+            id="create-room-pass"
+            placeholder="Lascia vuoto se libera"
+          />
+        </div>
+        <button
+          class="btn"
+          style="margin-top: 10px"
+          onclick="confermaCreaStanza()"
+        >
+          CREA E APRI LOBBY
+        </button>
+      </div>
+
+      <!-- SEZIONE LISTA STANZE DISPONIBILI -->
+      <div
+        id="box-lista-stanze"
+        style="display: none; width: 100%; max-width: 300px"
+      >
+        <label
+          style="
+            display: block;
+            font-size: 0.85rem;
+            color: var(--border-color);
+            margin-bottom: 6px;
+            font-weight: bold;
+            text-align: left;
+          "
+          >STANZE DISPONIBILI:</label
+        >
+        <div
+          id="rooms-container"
+          style="
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 10px;
+            text-align: left;
+            font-size: 0.9rem;
+          "
+        >
+          <i>Nessuna stanza attiva al momento...</i>
+        </div>
+        <div class="input-group" id="join-pass-box" style="display: none">
+          <label>INSERISCI PASSWORD:</label>
+          <input type="password" id="join-room-pass" />
+        </div>
+        <button
+          class="btn"
+          style="margin-top: 5px"
+          onclick="confermaEntraStanza()"
+        >
+          ENTRA NELLA STANZA
+        </button>
+        <button
+          class="btn secondary"
+          style="margin-top: 10px"
+          onclick="aggiornaLista()"
+        >
+          AGGIORNA LISTA
+        </button>
+      </div>
+
+      <button
+        class="btn secondary"
+        style="max-width: 300px; margin-top: 20px"
+        onclick="goBackMenu()"
+      >
+        INDIETRO
+      </button>
+    </div>
+
+    <!-- SALA D'ATTESA (Host e Guest) -->
+    <div id="waiting-room-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 10px">
+        Sala d'Attesa
+      </h2>
+      <h4 id="waiting-room-title" style="color: white; margin-bottom: 20px">
+        Stanza:
+      </h4>
+
+      <div
+        style="
+          background: rgba(0, 0, 0, 0.6);
+          padding: 15px;
+          border-radius: 8px;
+          width: 100%;
+          max-width: 300px;
+          margin-bottom: 20px;
+        "
+      >
+        <h4 style="color: #c99c51; margin-bottom: 10px">Giocatori Connessi:</h4>
+        <ul
+          id="waiting-players-list"
+          style="
+            list-style: none;
+            text-align: left;
+            color: white;
+            line-height: 1.8;
+          "
+        ></ul>
+      </div>
+
+      <button
+        id="btn-start-multi"
+        class="btn"
+        style="display: none; max-width: 300px; margin-bottom: 10px"
+        onclick="hostAvviaPartita()"
+      >
+        AVVIA PARTITA
+      </button>
+      <p
+        id="waiting-text"
+        style="
+          font-size: 0.85rem;
+          color: #aaa;
+          text-align: center;
+          max-width: 300px;
+        "
+      >
+        In attesa che l'Host avvii la partita...
+      </p>
+      <button
+        class="btn secondary"
+        style="max-width: 300px; margin-top: 20px"
+        onclick="quitGame()"
+      >
+        ESCI E TORNA AL MENU
+      </button>
+    </div>
+
+    <!-- OVERLAY MODAL -->
+    <div id="modal-overlay" class="modal-overlay">
+      <div class="modal-content" id="modal-content"></div>
+    </div>
+
+    <div id="game-ui">
+      <!-- Player invisibile per la musica -->
+      <audio id="bg-music"></audio>
+
+      <!-- BOTTONI SOCIAL E AGENZIA (IN GIOCO ALTO A SINISTRA) -->
+      <div style="position: absolute; top: 10px; left: 10px; z-index: 60; display: flex; flex-direction: column; gap: 6px;">
+        <a href="https://www.tiktok.com/t/ZMBmQArq8/" target="_blank" style="background: #2c4a8a; color: white; border: 1px solid white; border-radius: 15px; padding: 5px 10px; font-size: 0.65rem; font-weight: bold; text-decoration: none; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.8);">🚀 TOTALITY LIVE</a>
+        <div style="display: flex; gap: 5px;">
+          <a href="https://www.tiktok.com/@xxdonemusaxx?_r=1&_t=ZN-98azXsac5zi" target="_blank" title="Il mio TikTok" style="background: black; color: white; border: 1px solid var(--border-color); border-radius: 50%; width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; text-decoration: none; font-size: 0.8rem; box-shadow: 0 2px 5px rgba(0,0,0,0.8);">🎵</a>
+        </div>
+      </div>
+      
+      <button class="btn-exit" onclick="quitGame()">✖</button>
+      <!-- Controlli Musica e Volume -->
+      <div style="position: absolute; top: 10px; right: 55px; z-index: 60; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border-color);">
+        <button id="btn-toggle-music" onclick="toggleMusic()" style="background: #c99c51; color: #141b29; border: 2px solid white; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; padding: 0;">🎵</button>
+        <input type="range" id="music-volume" min="0" max="1" step="0.01" value="0.15" oninput="changeVolume(this.value)" style="width: 70px; cursor: pointer;">
+      </div>
+      
+      <div id="game-wrapper">
+        <div class="board" id="game-board"></div>
+      </div>
+      <div class="bottom-hud">
+        <div id="game-log">Turno in attesa...</div>
+        <div class="action-row">
+          <div class="action-left">
+            <button
+              class="btn secondary"
+              onclick="openInventoryAndTrade()"
+              id="btn-inventory"
+              style="margin-bottom: 5px"
+            >
+              CARTE & SCAMBI<br /><span style="color: gold; font-size: 1.1em"
+                >💰 0€</span
+              >
+            </button>
+            <div style="display: flex; gap: 5px">
+              <button
+                class="btn"
+                onclick="accendiMicrofono()"
+                id="btn-voice"
+                style="
+                  flex: 1;
+                  background: #2c4a8a;
+                  border-color: #1a2a5a;
+                  font-size: 0.65rem;
+                  min-height: 35px;
+                  padding: 5px;
+                "
+              >
+                🎤 AUDIO
+              </button>
+              <button
+                class="btn"
+                onclick="dichiaraBancarottaManuale()"
+                style="
+                  flex: 1;
+                  background: #bd2a2a;
+                  border-color: #7a1515;
+                  font-size: 0.65rem;
+                  min-height: 35px;
+                  padding: 5px;
+                "
+              >
+                🏳️ ARRENDITI
+              </button>
+            </div>
+          </div>
+          <div class="action-right" id="action-buttons"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById("menu-logo-img").onerror = function () {
+        this.style.display = "none";
+      };
+
+      const colors = ["#bd2a2a", "#2c4a8a", "#3b7a3b", "#d1b438"];
+      const botNames = ["Zio Turi", "Alfio", "Cettina"];
+
+      let players = [];
+      let currentPlayerIndex = 0;
+      let gameMode = "";
+      let botDifficulty = "medio";
+      let isMoving = false;
+      let currentDebt = 0;
+      let hasRolledDouble = false;
+
+      let socket = null;
+      let myRoom = "";
+      let myPlayerId = "";
+      let stanzaSelezionata = "";
+      let mainTimer = null; // Il Timer per i 10 secondi
+
+      // ---- INIZIO LOGICA MUSICA ----
+      const bgTracks = ["musica1.mp3", "musica2.mp3", "musica3.mp3", "musica4.mp3", "musica5.mp3", "musica6.mp3"];
+      let currentTrackIndex = -1;
+      let isMusicMuted = false;
+
+      function playRandomBgMusic() {
+        if (isMusicMuted) return;
+        let bgMusicEl = document.getElementById("bg-music");
+        let nextIndex;
+        // Sceglie una traccia a caso, assicurandosi che non sia la stessa di prima
+        do {
+          nextIndex = Math.floor(Math.random() * bgTracks.length);
+        } while (nextIndex === currentTrackIndex && bgTracks.length > 1);
+        
+        currentTrackIndex = nextIndex;
+        bgMusicEl.src = bgTracks[currentTrackIndex];
+        bgMusicEl.volume = document.getElementById("music-volume").value; // Prende il volume dalla levetta
+        bgMusicEl.play().catch(e => console.log("Autoplay bloccato", e));
+      }
+
+      function toggleMusic() {
+        let bgMusicEl = document.getElementById("bg-music");
+        let btnMusic = document.getElementById("btn-toggle-music");
+        isMusicMuted = !isMusicMuted;
+        
+        if (isMusicMuted) {
+          bgMusicEl.pause();
+          btnMusic.style.filter = "grayscale(100%)";
+          btnMusic.style.opacity = "0.5";
+        } else {
+          btnMusic.style.filter = "none";
+          btnMusic.style.opacity = "1";
+          if (!bgMusicEl.src || bgMusicEl.src.includes("null")) {
+             playRandomBgMusic();
+          } else {
+             bgMusicEl.play();
+          }
+        }
+      }
+
+      // Appena una canzone finisce, ne fa partire un'altra!
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("bg-music").addEventListener("ended", playRandomBgMusic);
+      });
+      // ---- FINE LOGICA MUSICA ----
+
+      window.changeVolume = function(val) {
+        let bgMusicEl = document.getElementById("bg-music");
+        if(bgMusicEl) bgMusicEl.volume = val;
+      };
+
+      // ---- MOTORE VOCALE (Il nostro "Piper Premium") ----
+      let speechUnlocked = false;
+
+      // Trucco Ninja: Sblocco forzato al primissimo tocco sullo schermo (Vitale per i Cellulari!)
+      function sbloccaVoce() {
+        if (!speechUnlocked && 'speechSynthesis' in window) {
+          let sblocco = new SpeechSynthesisUtterance(''); // Frase invisibile
+          window.speechSynthesis.speak(sblocco);
+          speechUnlocked = true;
+        }
+      }
+      // Ascolta il primo click o tocco ovunque nello schermo per togliere il "guinzaglio" ad Android/iOS
+      document.addEventListener('click', sbloccaVoce, { once: true });
+      document.addEventListener('touchstart', sbloccaVoce, { once: true });
+
+      // Forza il caricamento delle voci all'avvio
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = function() {
+          window.speechSynthesis.getVoices();
+        };
+      }
+
+      function leggiTesto(testo) {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel(); // Blocca se stava già parlando
+          window.speechSynthesis.resume(); // Bugfix Android: sveglia il motore se si è "addormentato"
+
+          let msg = new SpeechSynthesisUtterance(testo);
+          msg.lang = 'it-IT';
+          msg.rate = 1.0; 
+          msg.pitch = 1.0; 
+
+          // Cerca tutte le voci disponibili nel dispositivo
+          let voices = window.speechSynthesis.getVoices();
+          
+          // Cerca la voce di Google ad alta qualità, altrimenti prende la migliore italiana disponibile
+          let googleVoice = voices.find(function(v) { return v.lang.includes('it') && v.name.includes('Google'); });
+          let italianVoice = voices.find(function(v) { return v.lang === 'it-IT' || v.lang === 'it_IT'; });
+
+          if (googleVoice) {
+            msg.voice = googleVoice;
+          } else if (italianVoice) {
+            msg.voice = italianVoice;
+          }
+
+          window.speechSynthesis.speak(msg);
+        }
+      }
+
+      function avviaTimer(btnId, secondi, callbackTimeout) {
+        clearInterval(mainTimer);
+        let sec = secondi;
+        mainTimer = setInterval(function () {
+          sec--;
+          let b = document.getElementById(btnId);
+          if (b)
+            b.innerHTML = b.innerHTML.replace(/\(\d+s\)/, "(" + sec + "s)");
+          if (sec <= 0) {
+            clearInterval(mainTimer);
+            if (callbackTimeout) callbackTimeout();
+          }
+        }, 1000);
+      }
+
+      function bloccaTimer() {
+        clearInterval(mainTimer);
+      }
+
+      function hostAvviaPartita() {
+        if (socket) socket.emit("hostStartGame", { roomName: myRoom });
+      }
+
+      const properties = {
+        1: {
+          name: "P.zza Stesicoro",
+          group: "marrone",
+          price: 60,
+          rent: 2,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        3: {
+          name: "Via Plebiscito",
+          group: "marrone",
+          price: 60,
+          rent: 4,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        5: {
+          name: "Stazione Acquicella",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        12: {
+          name: "Bolletta Luce",
+          group: "societa",
+          price: 150,
+          rent: 20,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        15: {
+          name: "Stazione Centrale",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        25: {
+          name: "Stazione Borgo",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        28: {
+          name: "Bolletta Acqua",
+          group: "societa",
+          price: 150,
+          rent: 20,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        35: {
+          name: "Stazione Ognina",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        6: {
+          name: "Via Crociferi",
+          group: "celeste",
+          price: 100,
+          rent: 6,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        8: {
+          name: "P.zza Duomo",
+          group: "celeste",
+          price: 100,
+          rent: 6,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        9: {
+          name: "Via Etnea",
+          group: "celeste",
+          price: 120,
+          rent: 8,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        11: {
+          name: "Via Umberto",
+          group: "viola",
+          price: 140,
+          rent: 10,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        13: {
+          name: "Corso Italia",
+          group: "viola",
+          price: 140,
+          rent: 10,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        14: {
+          name: "Viale Jonio",
+          group: "viola",
+          price: 160,
+          rent: 12,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        16: {
+          name: "Cibali",
+          group: "arancio",
+          price: 180,
+          rent: 14,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        18: {
+          name: "Viale Rapisardi",
+          group: "arancio",
+          price: 180,
+          rent: 14,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        19: {
+          name: "P.zza Eroi",
+          group: "arancio",
+          price: 200,
+          rent: 16,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        21: {
+          name: "Via Sangiuliano",
+          group: "rosso",
+          price: 220,
+          rent: 18,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        23: {
+          name: "Teatro Massimo",
+          group: "rosso",
+          price: 220,
+          rent: 18,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        24: {
+          name: "P.zza Bellini",
+          group: "rosso",
+          price: 240,
+          rent: 20,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        26: {
+          name: "La Playa",
+          group: "giallo",
+          price: 260,
+          rent: 22,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        27: {
+          name: "Viale Kennedy",
+          group: "giallo",
+          price: 260,
+          rent: 22,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        29: {
+          name: "S.G. Li Cuti",
+          group: "giallo",
+          price: 280,
+          rent: 24,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        31: {
+          name: "Via V. Emanuele",
+          group: "verde",
+          price: 300,
+          rent: 26,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        32: {
+          name: "Monastero Benedettini",
+          group: "verde",
+          price: 300,
+          rent: 26,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        34: {
+          name: "Castello Ursino",
+          group: "verde",
+          price: 320,
+          rent: 28,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        37: {
+          name: "Lungomare",
+          group: "blu",
+          price: 350,
+          rent: 35,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        39: {
+          name: "Etna",
+          group: "blu",
+          price: 400,
+          rent: 50,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+      };
+
+      const tileHtmlMap = [
+        `<div class="tile corner" id="tile-0">VIA!<br><span style="color:green">+200</span></div>`,
+        `<div class="tile" id="tile-1"><div class="tile-header c-marrone"></div>Stesicoro<div class="price-tag">60€</div></div>`,
+        `<div class="tile" id="tile-2"><div class="emoji-icon">❓</div>Vediamo<br>che succede</div>`,
+        `<div class="tile" id="tile-3"><div class="tile-header c-marrone"></div>Plebiscito<div class="price-tag">60€</div></div>`,
+        `<div class="tile" id="tile-4"><div class="emoji-icon">🗑️</div>Paga la<br>Spazzatura</div>`,
+        `<div class="tile" id="tile-5"><div class="emoji-icon">🚆</div>Acquicella<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-6"><div class="tile-header c-celeste"></div>Crociferi<div class="price-tag">100€</div></div>`,
+        `<div class="tile" id="tile-7"><div class="emoji-icon">🎲</div>Speriamo<br>bene</div>`,
+        `<div class="tile" id="tile-8"><div class="tile-header c-celeste"></div>Duomo<div class="price-tag">100€</div></div>`,
+        `<div class="tile" id="tile-9"><div class="tile-header c-celeste"></div>Etnea<div class="price-tag">120€</div></div>`,
+        `<div class="tile corner" id="tile-10"><div class="jail-cell"><div class="emoji-icon" style="font-size:0.8rem; margin:0;">🚓</div>P. Lanza</div><div class="visiting">Passaggio</div></div>`,
+        `<div class="tile" id="tile-11"><div class="tile-header c-viola"></div>Umberto<div class="price-tag">140€</div></div>`,
+        `<div class="tile" id="tile-12"><div class="emoji-icon">💡</div>Bolletta Luce<div class="price-tag">150€</div></div>`,
+        `<div class="tile" id="tile-13"><div class="tile-header c-viola"></div>C. Italia<div class="price-tag">140€</div></div>`,
+        `<div class="tile" id="tile-14"><div class="tile-header c-viola"></div>V.le Jonio<div class="price-tag">160€</div></div>`,
+        `<div class="tile" id="tile-15"><div class="emoji-icon">🚆</div>Centrale<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-16"><div class="tile-header c-arancio"></div>Cibali<div class="price-tag">180€</div></div>`,
+        `<div class="tile" id="tile-17"><div class="emoji-icon">❓</div>Vediamo<br>che succede</div>`,
+        `<div class="tile" id="tile-18"><div class="tile-header c-arancio"></div>Rapisardi<div class="price-tag">180€</div></div>`,
+        `<div class="tile" id="tile-19"><div class="tile-header c-arancio"></div>P.zza Eroi<div class="price-tag">200€</div></div>`,
+        `<div class="tile corner" id="tile-20"><div class="emoji-icon">🍋</div>Chiosco del Borgo</div>`,
+        `<div class="tile" id="tile-21"><div class="tile-header c-rosso"></div>Sangiuliano<div class="price-tag">220€</div></div>`,
+        `<div class="tile" id="tile-22"><div class="emoji-icon">🎲</div>Speriamo<br>bene</div>`,
+        `<div class="tile" id="tile-23"><div class="tile-header c-rosso"></div>Teatro Max<div class="price-tag">220€</div></div>`,
+        `<div class="tile" id="tile-24"><div class="tile-header c-rosso"></div>P.zza Bellini<div class="price-tag">240€</div></div>`,
+        `<div class="tile" id="tile-25"><div class="emoji-icon">🚆</div>Borgo<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-26"><div class="tile-header c-giallo"></div>La Playa<div class="price-tag">260€</div></div>`,
+        `<div class="tile" id="tile-27"><div class="tile-header c-giallo"></div>V.le Kennedy<div class="price-tag">260€</div></div>`,
+        `<div class="tile" id="tile-28"><div class="emoji-icon">💧</div>Bolletta Acqua<div class="price-tag">150€</div></div>`,
+        `<div class="tile" id="tile-29"><div class="tile-header c-giallo"></div>S.G. Li Cuti<div class="price-tag">280€</div></div>`,
+        `<div class="tile corner" id="tile-30"><div class="emoji-icon">🚓</div>Trasferito in<br>P.zza Lanza</div>`,
+        `<div class="tile" id="tile-31"><div class="tile-header c-verde"></div>V. Emanuele<div class="price-tag">300€</div></div>`,
+        `<div class="tile" id="tile-32"><div class="tile-header c-verde"></div>Benedettini<div class="price-tag">300€</div></div>`,
+        `<div class="tile" id="tile-33"><div class="emoji-icon">❓</div>Vediamo<br>che succede</div>`,
+        `<div class="tile" id="tile-34"><div class="tile-header c-verde"></div>C. Ursino<div class="price-tag">320€</div></div>`,
+        `<div class="tile" id="tile-35"><div class="emoji-icon">🚆</div>Ognina<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-36"><div class="emoji-icon">🎲</div>Speriamo<br>bene</div>`,
+        `<div class="tile" id="tile-37"><div class="tile-header c-blu"></div>Lungomare<div class="price-tag">350€</div></div>`,
+        `<div class="tile" id="tile-38"><div class="emoji-icon">🥷</div>Rapina</div>`,
+        `<div class="tile" id="tile-39"><div class="tile-header c-blu"></div>Etna<div class="price-tag">400€</div></div>`,
+        `<div class="center-board"><img src="logo-catanopoli.png" alt="Logo"><div id="dice-result"></div></div>`,
+      ];
+
+      const tileNames = [
+        "VIA!",
+        "P.zza Stesicoro",
+        "Vediamo che succede",
+        "Via Plebiscito",
+        "Paga la Spazzatura",
+        "Stazione Acquicella",
+        "Via Crociferi",
+        "Speriamo bene",
+        "P.zza Duomo",
+        "Via Etnea",
+        "Passaggio / Piazza Lanza",
+        "Via Umberto",
+        "Bolletta della Luce",
+        "Corso Italia",
+        "Viale Jonio",
+        "Stazione Centrale",
+        "Cibali",
+        "Vediamo che succede",
+        "Viale Rapisardi",
+        "P.zza Eroi",
+        "Chiosco del Borgo",
+        "Via Sangiuliano",
+        "Speriamo bene",
+        "Teatro Massimo",
+        "P.zza Bellini",
+        "Stazione Borgo",
+        "La Playa",
+        "Viale Kennedy",
+        "Bolletta dell'Acqua",
+        "S.G. Li Cuti",
+        "Trasferito in Piazza Lanza",
+        "Via V. Emanuele",
+        "Monastero Benedettini",
+        "Vediamo che succede",
+        "Castello Ursino",
+        "Stazione Ognina",
+        "Speriamo bene",
+        "Lungomare",
+        "Rapina",
+        "Etna",
+      ];
+
+      const mazzoSperiamoBene = [
+        {
+          text: "Zio Turi ti ha lasciato la mancia per l'onomastico! Ritira 50€.",
+          action: (p) => {
+            p.money += 50;
+          },
+        },
+        {
+          text: "Hai venduto abusivamente i biglietti del Catania fuori dal Cibali. Incassa 100€.",
+          action: (p) => {
+            p.money += 100;
+          },
+        },
+        {
+          text: "Rimborso dalla bolletta della luce per i continui distacchi. Ritira 20€.",
+          action: (p) => {
+            p.money += 20;
+          },
+        },
+        {
+          text: "Sei il re della pescheria! Hai venduto tutto il tonno. Ritira 150€.",
+          action: (p) => {
+            p.money += 150;
+          },
+        },
+        {
+          text: "Sant'Agata è vicina, hai montato il banchetto del torrone e fatto affari d'oro. Incassa 100€.",
+          action: (p) => {
+            p.money += 100;
+          },
+        },
+        {
+          text: "Hai trovato parcheggio subito in Via Etnea senza posteggiatore! Trovi 10€ a terra.",
+          action: (p) => {
+            p.money += 10;
+          },
+        },
+        {
+          text: "Hai vinto al lotto giocato nella ricevitoria al Borgo. Ritira 200€.",
+          action: (p) => {
+            p.money += 200;
+          },
+        },
+        {
+          text: "Concorso di bellezza a La Playa, hai vinto il primo premio. Ritira 50€.",
+          action: (p) => {
+            p.money += 50;
+          },
+        },
+        {
+          text: "Hai affittato la casa vacanze ai turisti in Via Crociferi. Incassa 80€.",
+          action: (p) => {
+            p.money += 80;
+          },
+        },
+        {
+          text: "Scommessa vinta sui cavalli alla sala corse. Prendi 60€.",
+          action: (p) => {
+            p.money += 60;
+          },
+        },
+        {
+          text: "Il tuo b&b a San Giovanni Li Cuti è pieno. Ritira 100€.",
+          action: (p) => {
+            p.money += 100;
+          },
+        },
+        {
+          text: "Hai fatto l'aiuto cuoco da Fud e ti hanno dato il bonus. Ritira 40€.",
+          action: (p) => {
+            p.money += 40;
+          },
+        },
+        {
+          text: "Hai venduto vecchie cianfrusaglie alla Fiera dei Morti. Prendi 70€.",
+          action: (p) => {
+            p.money += 70;
+          },
+        },
+        {
+          text: "Hai organizzato un torneo di calcetto al Cibalino e hai vinto la quota. Ritira 90€.",
+          action: (p) => {
+            p.money += 90;
+          },
+        },
+        {
+          text: "Sei stato eletto Catanese del Mese. Premio di 150€.",
+          action: (p) => {
+            p.money += 150;
+          },
+        },
+      ];
+
+      const mazzoVediamoCheSuccede = [
+        {
+          text: "Hai posteggiato male al Duomo. Multa dei vigili! Paga 50€.",
+          action: (p) => {
+            p.money -= 50;
+          },
+        },
+        {
+          text: "Pioggia di cenere vulcanica dall'Etna! Devi per forza lavare la macchina. Paga 20€.",
+          action: (p) => {
+            p.money -= 20;
+          },
+        },
+        {
+          text: "Andavi troppo forte in Circonvallazione. Autovelox! Paga 100€.",
+          action: (p) => {
+            p.money -= 100;
+          },
+        },
+        {
+          text: "Hai fumato crack alle 4 di notte ti hanno arrestato. Vai in Piazza Lanza a riposare.",
+          action: (p) => {
+            p.position = 10;
+            p.inJail = true;
+            p.jailTurns = 0;
+          },
+        },
+        {
+          text: "Hai bucato una ruota nella lapa per andare ad Acitrezza. Paga 40€ dal gommista.",
+          action: (p) => {
+            p.money -= 40;
+          },
+        },
+        {
+          text: "Ti hanno clonato il bancomat in Corso Italia. Perdi 150€.",
+          action: (p) => {
+            p.money -= 150;
+          },
+        },
+        {
+          text: "Allagamento al Villaggio Santa Maria Goretti, devi riparare lo scooter. Paga 80€.",
+          action: (p) => {
+            p.money -= 80;
+          },
+        },
+        {
+          text: "Controllo a sorpresa della Finanza nel tuo chiosco. Multa di 200€.",
+          action: (p) => {
+            p.money -= 200;
+          },
+        },
+        {
+          text: "Hai fatto macello alla festa della birra, devi risarcire i danni. Paga 50€.",
+          action: (p) => {
+            p.money -= 50;
+          },
+        },
+        {
+          text: "L'AMT ha scioperato, hai dovuto prendere un taxi abusivo. Paga 30€.",
+          action: (p) => {
+            p.money -= 30;
+          },
+        },
+        {
+          text: "Hai perso il portafoglio mentre mangiavi la carne di cavallo in Via Plebiscito. Paga 60€.",
+          action: (p) => {
+            p.money -= 60;
+          },
+        },
+        {
+          text: "Riparazioni urgenti per il tuo appartamento. Paga 100€.",
+          action: (p) => {
+            p.money -= 100;
+          },
+        },
+        {
+          text: "Hai pagato troppo il pesce spada perché non hai contrattato. Paga 20€.",
+          action: (p) => {
+            p.money -= 20;
+          },
+        },
+        {
+          text: "Hai sbattuto contro il muretto al Lungomare Ognina. Carrozziere: 70€.",
+          action: (p) => {
+            p.money -= 70;
+          },
+        },
+        {
+          text: "Il vigile ti ha beccato col motorino senza casco a San Cristoforo. Multa 120€.",
+          action: (p) => {
+            p.money -= 120;
+          },
+        },
+      ];
+
+      const diceFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+
+      function renderBoard() {
+        const board = document.getElementById("game-board");
+        board.innerHTML = tileHtmlMap.join("");
+        for (let i = 0; i < 40; i++) {
+          let t = document.getElementById("tile-" + i);
+          if (t) {
+            let tc = document.createElement("div");
+            tc.className = "tokens-container";
+            tc.id = "tc-" + i;
+            t.appendChild(tc);
+            // Modifica per renderle cliccabili
+            t.style.cursor = "pointer";
+            t.onclick = function () {
+              mostraInfoTerreno(i);
+            };
+          }
+        }
+      }
+
+      function showSetup(mode) {
+        gameMode = mode;
+        document.getElementById("main-menu").style.display = "none";
+        if (mode === "single") {
+          document.getElementById("bot-setup-menu").style.display = "flex";
+        } else {
+          document.getElementById("multi-setup-menu").style.display = "flex";
+          mostraCreaStanza();
+        }
+      }
+
+      function goBackMenu() {
+        document.getElementById("bot-setup-menu").style.display = "none";
+        if (document.getElementById("multi-setup-menu"))
+          document.getElementById("multi-setup-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "flex";
+      }
+
+      function mostraCreaStanza() {
+        document.getElementById("box-crea-stanza").style.display = "block";
+        document.getElementById("box-lista-stanze").style.display = "none";
+      }
+
+      function mostraListaStanze() {
+        document.getElementById("box-crea-stanza").style.display = "none";
+        document.getElementById("box-lista-stanze").style.display = "block";
+        aggiornaLista();
+      }
+
+      function aggiornaLista() {
+        if (typeof io !== "undefined") {
+          if (!socket) socket = io();
+
+          // FORZIAMO LA LETTURA DELLE STANZE SUBITO!
+          socket.on("roomList", function (roomsList) {
+            let container = document.getElementById("rooms-container");
+            if (!container) return;
+            if (roomsList.length === 0) {
+              container.innerHTML =
+                "<i>Nessuna stanza attiva al momento...</i>";
+              return;
+            }
+            container.innerHTML = roomsList
+              .map(function (r) {
+                let iconaLock = r.hasPass ? "🔒" : "";
+                return (
+                  "<div class='room-item' onclick='selezionaStanza(\"" +
+                  r.name +
+                  '", ' +
+                  r.hasPass +
+                  ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'>" +
+                  "<span><b>" +
+                  r.name +
+                  "</b> " +
+                  iconaLock +
+                  "</span><span style='font-size:0.8rem; color:#aaa;'>(" +
+                  r.playersCount +
+                  "/4)</span></div>"
+                );
+              })
+              .join("");
+          });
+
+          socket.emit("getRooms");
+        }
+      }
+
+      function confermaCreaStanza() {
+        if (typeof io === "undefined") {
+          alert("Errore: Il server di gioco sta ancora caricando. Riprova tra 2 secondi!");
+          return;
+        }
+        if (!socket) socket = io();
+        myRoom = document.getElementById("create-room-name").value.trim();
+        let roomPass = document.getElementById("create-room-pass").value;
+        const pName = document.getElementById("setup-name").value || "Lucio";
+        const startMoney = parseInt(document.getElementById("setup-money").value);
+        const pToken = document.getElementById("setup-token").value; // AGGIUNTA PEDINA
+
+        if (!myRoom) { alert("Inserisci un nome per la stanza!"); return; }
+
+        socket.emit("createRoom", { roomName: myRoom, roomPass: roomPass, name: pName, startMoney: startMoney, token: pToken });
+        inizializzaEventiMultiplayer();
+      }
+
+      function selezionaStanza(nomeStanza, haPassword) {
+        stanzaSelezionata = nomeStanza;
+        document.querySelectorAll(".room-item").forEach((el) => (el.style.background = "transparent"));
+        event.currentTarget.style.background = "rgba(201, 156, 81, 0.3)";
+        document.getElementById("join-pass-box").style.display = haPassword ? "block" : "none";
+      }
+
+      function confermaEntraStanza() {
+        if (!stanzaSelezionata) { alert("Seleziona una stanza dalla lista!"); return; }
+        if (typeof io === "undefined") { alert("Errore di connessione."); return; }
+        if (!socket) socket = io();
+
+        myRoom = stanzaSelezionata;
+        let roomPass = document.getElementById("join-room-pass").value;
+        const pName = document.getElementById("setup-name").value || "Lucio";
+        const startMoney = parseInt(document.getElementById("setup-money").value);
+        const pToken = document.getElementById("setup-token").value; // AGGIUNTA PEDINA
+
+        socket.emit("joinSpecificRoom", { roomName: myRoom, roomPass: roomPass, name: pName, startMoney: startMoney, token: pToken });
+        inizializzaEventiMultiplayer();
+      }
+
+      function inizializzaEventiMultiplayer() {
+        document.getElementById("multi-setup-menu").style.display = "none";
+
+        socket.off("roomError");
+        socket.off("roomList");
+        socket.off("waitingRoomUpdate");
+        socket.off("gameStarted");
+        socket.off("updateState");
+        socket.off("diceRolled");
+        socket.off("stateSynced");
+        socket.off("receiveTradeOffer");
+        socket.off("tradeResult");
+
+        socket.on("roomError", function (msg) {
+          alert(msg);
+          quitGame();
+        });
+
+        socket.on("roomList", function (roomsList) {
+          let container = document.getElementById("rooms-container");
+          if (!container) return;
+          if (roomsList.length === 0) {
+            container.innerHTML = "<i>Nessuna stanza attiva...</i>";
+            return;
+          }
+
+          container.innerHTML = roomsList
+            .map(function (r) {
+              let iconaLock = r.hasPass ? "🔒" : "";
+              return (
+                "<div class='room-item' onclick='selezionaStanza(\"" +
+                r.name +
+                '", ' +
+                r.hasPass +
+                ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'>" +
+                "<span><b>" +
+                r.name +
+                "</b> " +
+                iconaLock +
+                "</span><span style='font-size:0.8rem; color:#aaa;'>(" +
+                r.playersCount +
+                "/4)</span></div>"
+              );
+            })
+            .join("");
+        });
+
+        // GESTIONE SALA D'ATTESA
+        socket.on("waitingRoomUpdate", function (roomData) {
+          document.getElementById("waiting-room-menu").style.display = "flex";
+          document.getElementById("waiting-room-title").innerText =
+            "Stanza: " + myRoom;
+
+          let listaGiocatoriHTML = roomData.players
+            .map(function (p, i) {
+              return (
+                "<li>" +
+                (i + 1) +
+                ". <span style='color:" +
+                p.color +
+                "'>" +
+                p.name +
+                "</span> " +
+                (p.id === roomData.hostId ? "👑" : "") +
+                "</li>"
+              );
+            })
+            .join("");
+          document.getElementById("waiting-players-list").innerHTML =
+            listaGiocatoriHTML;
+
+          if (socket.id === roomData.hostId) {
+            document.getElementById("waiting-text").style.display = "none";
+            let btnAvvia = document.getElementById("btn-start-multi");
+            btnAvvia.style.display = "flex";
+            btnAvvia.disabled = roomData.players.length < 2;
+            btnAvvia.innerHTML =
+              roomData.players.length < 2
+                ? "ATTENDI GIOCATORI..."
+                : "AVVIA PARTITA";
+          } else {
+            document.getElementById("waiting-text").style.display = "block";
+            document.getElementById("btn-start-multi").style.display = "none";
+          }
+        });
+
+        // INIZIO PARTITA! (Ricevuto da tutti)
+        socket.on("gameStarted", function (roomData) {
+          document.getElementById("waiting-room-menu").style.display = "none";
+          document.getElementById("game-ui").style.display = "flex";
+          renderBoard();
+          applicaStatoGioco(roomData);
+          if (!myPeer) accendiMicrofono(); // Accende il mic a partita iniziata
+        });
+
+        socket.on("updateState", function (serverData) {
+          applicaStatoGioco(serverData);
+        });
+        socket.on("diceRolled", function (data) {
+          if (data.playerId !== socket.id)
+            animateDice(data.d1, data.d2, function () {});
+        });
+
+        socket.on("stateSynced", function (data) {
+          players = data.players;
+          Object.keys(data.properties).forEach(function (k) {
+            properties[k].owner = data.properties[k].owner;
+            properties[k].houses = data.properties[k].houses;
+          });
+          if (data.logMsg)
+            document.getElementById("game-log").innerHTML = data.logMsg;
+          updateTokens();
+        });
+
+        socket.on("receiveTradeOffer", function (data) {
+          if (String(data.targetId) === String(socket.id)) {
+            mostraPopupRicezioneScambio(data);
+          }
+        });
+
+        socket.on("tradeResult", function (data) {
+          if (String(data.offerta.fromId) === String(socket.id)) {
+            if (data.accepted) {
+              alert(data.targetName + " ha ACCETTATO lo scambio!");
+              let pRicevente = players.find(function (p) {
+                return String(p.id) === String(data.targetId);
+              });
+              let pOfferente = players.find(function (p) {
+                return String(p.id) === String(data.offerta.fromId);
+              });
+
+              pRicevente.money -= data.offerta.requestMoney;
+              pRicevente.money += data.offerta.offerMoney;
+              pOfferente.money += data.offerta.requestMoney;
+              pOfferente.money -= data.offerta.offerMoney;
+
+              data.offerta.mySelected.forEach(function (k) {
+                properties[k].owner = data.targetId;
+              });
+              data.offerta.hisSelected.forEach(function (k) {
+                properties[k].owner = data.offerta.fromId;
+                document.getElementById("tile-" + k).style.boxShadow =
+                  "inset 0 0 10px " + pOfferente.color;
+              });
+
+              updateTokens();
+              socket.emit("syncAction", {
+                room: myRoom,
+                players: players,
+                properties: properties,
+                logMsg:
+                  "Scambio concluso tra " +
+                  data.offerta.fromName +
+                  " e " +
+                  data.targetName,
+              });
+            } else {
+              alert(data.targetName + " ha RIFIUTATO lo scambio.");
+            }
+          }
+        });
+
+        socket.on("userVoiceReady", function (peerIdTarget) {
+          if (myPeer && myAudioStream) {
+            const call = myPeer.call(peerIdTarget, myAudioStream);
+            call.on("stream", function (userAudioStream) {
+              aggiungiAudioPlayer(peerIdTarget, userAudioStream);
+            });
+          }
+        });
+      }
+
+      function applicaStatoGioco(serverData) {
+        players = serverData.players;
+        currentPlayerIndex = serverData.turnIndex;
+        myPlayerId = socket.id;
+
+        Object.keys(serverData.properties).forEach(function (k) {
+          properties[k].owner = serverData.properties[k].owner;
+          properties[k].houses = serverData.properties[k].houses;
+          if (properties[k].owner !== null) {
+            let ownerP = players.find(function (pl) {
+              return pl.id === properties[k].owner;
+            });
+            if (ownerP) {
+              document.getElementById("tile-" + k).style.boxShadow =
+                "inset 0 0 10px " + ownerP.color;
+              updateHousesDisplay(k);
+            }
+          } else {
+            document.getElementById("tile-" + k).style.boxShadow = "none";
+          }
+        });
+
+        updateTokens();
+        startTurnFlow();
+      }
+
+      function animateDice(d1, d2, callback) {
+        let diceArea = document.getElementById("dice-result");
+        let rollCount = 0;
+        let rollAnim = setInterval(function () {
+          diceArea.innerHTML =
+            "<span class='rolling-dice'>" +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            " " +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            "</span>";
+          rollCount++;
+          if (rollCount >= 10) {
+            clearInterval(rollAnim);
+            const total = d1 + d2;
+            diceArea.innerHTML =
+              "<span style='font-size: clamp(1.5rem, 4.5vmin, 3.5rem); letter-spacing: 5px;'>" +
+              diceFaces[d1 - 1] +
+              " " +
+              diceFaces[d2 - 1] +
+              "</span> <span style='font-size: clamp(1.2rem, 3.5vmin, 2.5rem); font-weight: bold; margin-left: 10px;'>" +
+              total +
+              "</span>";
+            if (callback) callback();
+          }
+        }, 50);
+      }
+
+      function startGame(mode) {
+        renderBoard();
+        const pName = document.getElementById("setup-name").value || "Lucio";
+        const startMoney = parseInt(document.getElementById("setup-money").value);
+        const pToken = document.getElementById("setup-token").value; // PRENDE LA PEDINA
+
+        const availableBotTokens = ["🐘", "🍊", "🛵", "🍧", "🌋", "⚽", "🚓"].filter(t => t !== pToken);
+
+        players = [];
+        players.push({
+          id: 0,
+          name: pName,
+          isBot: false,
+          money: startMoney,
+          position: 0,
+          color: colors[0],
+          inJail: false,
+          jailTurns: 0,
+          bankrupt: false,
+          token: pToken // SALVA LA TUA PEDINA
+        });
+
+        if (mode === "single") {
+          const botCount = parseInt(document.getElementById("setup-bots-count").value);
+          botDifficulty = document.getElementById("setup-bots-diff").value;
+          for (let i = 1; i <= botCount; i++) {
+            // Assegna una pedina a caso ai bot
+            let botTokenIndex = Math.floor(Math.random() * availableBotTokens.length);
+            let bToken = availableBotTokens.splice(botTokenIndex, 1)[0];
+
+            players.push({
+              id: i,
+              name: botNames[i - 1],
+              isBot: true,
+              money: startMoney,
+              position: 0,
+              color: colors[i],
+              inJail: false,
+              jailTurns: 0,
+              bankrupt: false,
+              token: bToken // SALVA LA PEDINA DEL BOT
+            });
+          }
+        }
+        Object.keys(properties).forEach(function (k) {
+          properties[k].owner = null;
+          properties[k].houses = 0;
+        });
+        currentPlayerIndex = 0;
+        document.getElementById("bot-setup-menu").style.display = "none";
+        if (document.getElementById("multi-setup-menu"))
+          document.getElementById("multi-setup-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "none";
+        document.getElementById("game-ui").style.display = "flex";
+        
+        // Fai partire la musica!
+        let bgMusicEl = document.getElementById("bg-music");
+        if (bgMusicEl.paused && !isMusicMuted) playRandomBgMusic();
+
+        updateTokens();
+        startTurnFlow();
+      }
+
+      function quitGame() {
+        if (socket) socket.disconnect();
+        socket = null;
+        bloccaTimer();
+        document.getElementById("game-ui").style.display = "none";
+        document.getElementById("waiting-room-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "flex";
+      }
+
+      function getP() {
+        return players[currentPlayerIndex];
+      }
+
+      function updateTokens() {
+        for (let i = 0; i < 40; i++) {
+          document.getElementById("tc-" + i).innerHTML = "";
+        }
+        // Emoji di scorta in caso il server non sincronizzi le scelte in multiplayer
+        const fallbackTokens = ["🐘", "🍊", "🛵", "🍧"]; 
+
+        players.forEach(function (p, index) {
+          if (!p.bankrupt) {
+            let t = document.createElement("div");
+            t.className = "player-token";
+            t.style.backgroundColor = p.color;
+            // Inserisce la pedina scelta, oppure una di scorta
+            t.innerHTML = p.token ? p.token : fallbackTokens[index % fallbackTokens.length];
+            document.getElementById("tc-" + p.position).appendChild(t);
+          }
+        });
+
+        let mioPlayer = players.find(function (p) {
+          return String(p.id) === String(gameMode === "multi" ? socket.id : 0);
+        });
+        if (mioPlayer && !mioPlayer.bankrupt) {
+          document.getElementById("btn-inventory").innerHTML =
+            "CARTE & SCAMBI<br><span style='color: gold; font-size: 1.1em; margin-top: 3px;'>💰 " +
+            mioPlayer.money +
+            "€</span>";
+        }
+      }
+
+      function setRightAction(html) {
+        document.getElementById("action-buttons").innerHTML = html;
+      }
+
+      function lancioDadiProtetto() {
+        bloccaTimer();
+        rollDice();
+      }
+      function fineTurnoProtetto() {
+        bloccaTimer();
+        endTurn("Tempo scaduto / Passato.");
+      }
+      function azioneUmanaProtetta(azione) {
+        bloccaTimer();
+        humanAction(azione);
+      }
+
+      function startTurnFlow() {
+        bloccaTimer();
+
+        // 1. CONTROLLO VITTORIA ASSOLUTO: Controlla sempre quanti giocatori sono rimasti!
+        let activePlayers = players.filter(function (pl) {
+          return !pl.bankrupt;
+        });
+
+        if (activePlayers.length === 1) {
+          let winner = activePlayers[0].name;
+          document.getElementById("game-log").innerHTML =
+            "🏆 <b>" + winner + " HA VINTO LA PARTITA!</b> 🏆";
+          setRightAction(
+            "<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU E RIGIOCA</button>"
+          );
+          return; // Blocca tutto, la partita è finita!
+        } else if (activePlayers.length === 0) {
+          document.getElementById("game-log").innerHTML =
+            "☠️ <b>TUTTI IN BANCAROTTA! NESSUN VINCITORE!</b>";
+          setRightAction(
+            "<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU</button>"
+          );
+          return;
+        }
+
+        let p = getP();
+
+        // 2. SE IL GIOCATORE DI TURNO È FALLITO, SALTA IL SUO TURNO
+        if (p.bankrupt) {
+          currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+          setTimeout(startTurnFlow, 100);
+          return;
+        }
+
+        // SE E' IL TURNO DELL'AVVERSARIO IN MULTIPLAYER (PROTEZIONE)
+        if (gameMode === "multi" && p.id !== socket.id) {
+          setRightAction(
+            "<button class='btn secondary' disabled>Turno di " +
+              p.name +
+              " (" +
+              (hasRolledDouble ? "DOPPIO" : "ATTESA") +
+              ")...</button>"
+          );
+          document.getElementById("game-log").innerHTML =
+            "È il turno di <b style='color:" + p.color + "'>" + p.name + "</b>";
+          return;
+        }
+
+        // SE E' IL MIO TURNO (O DEL MIO BOT IN SINGLEPLAYER)
+        if (p.isBot) {
+          setRightAction(
+            "<button class='btn secondary' disabled>Turno di " +
+              p.name +
+              " (" +
+              (hasRolledDouble ? "DOPPIO" : "ATTESA") +
+              ")...</button>"
+          );
+          document.getElementById("game-log").innerHTML =
+            "È il turno di <b style='color:" + p.color + "'>" + p.name + "</b>";
+          setTimeout(lancioDadiProtetto, 1500);
+        } else {
+          document.getElementById("game-log").innerHTML =
+            "È il tuo turno, <b>" + p.name + "</b>!";
+          if (p.inJail) {
+            setRightAction(
+              "<div style='display:flex; gap:10px; height: 100%; width: 100%;'>" +
+                "<button class='btn secondary' id='btn-jail' style='border-color: #bd2a2a; color: #bd2a2a;' onclick='payJail()'>PAGA 200€</button>" +
+                "<button class='btn' id='btn-roll-jail' onclick='lancioDadiProtetto()'>DOPPIO (10s)</button>" +
+                "</div>"
+            );
+            avviaTimer("btn-roll-jail", 10, lancioDadiProtetto);
+          } else {
+            setRightAction(
+              "<button class='btn' id='btn-roll' onclick='lancioDadiProtetto()'>LANCIA I DADI (10s)</button>"
+            );
+            avviaTimer("btn-roll", 10, lancioDadiProtetto);
+          }
+        }
+      }
+
+      function rollDice() {
+        if (isMoving) return;
+        isMoving = true;
+        let p = getP();
+        setRightAction(
+          "<button class='btn secondary' disabled>ATTENDI...</button>"
+        );
+        document.getElementById("game-log").innerHTML =
+          "<i>Lancio in corso...</i>";
+
+        let diceArea = document.getElementById("dice-result");
+        let rollCount = 0;
+        let rollAnim = setInterval(function () {
+          diceArea.innerHTML =
+            "<span class='rolling-dice'>" +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            " " +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            "</span>";
+          rollCount++;
+          if (rollCount >= 10) {
+            clearInterval(rollAnim);
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+            const total = d1 + d2;
+            diceArea.innerHTML =
+              "<span style='font-size: clamp(1.5rem, 4.5vmin, 3.5rem); letter-spacing: 5px;'>" +
+              diceFaces[d1 - 1] +
+              " " +
+              diceFaces[d2 - 1] +
+              "</span> <span style='font-size: clamp(1.2rem, 3.5vmin, 2.5rem); font-weight: bold; margin-left: 10px;'>" +
+              total +
+              "</span>";
+
+            if (gameMode === "multi" && socket)
+              socket.emit("rollDice", { room: myRoom, d1: d1, d2: d2 });
+            hasRolledDouble = d1 === d2;
+
+            if (p.inJail) {
+              if (hasRolledDouble) {
+                p.inJail = false;
+                p.jailTurns = 0;
+                document.getElementById("game-log").innerHTML =
+                  "<i>Doppio! Libero!</i>";
+                startMoving(total);
+              } else {
+                p.jailTurns++;
+                if (p.jailTurns >= 3) {
+                  p.money -= 200;
+                  p.inJail = false;
+                  p.jailTurns = 0;
+                  document.getElementById("game-log").innerHTML =
+                    "<i>Pagati 200€ forzati!</i>";
+                  hasRolledDouble = false;
+                  startMoving(total);
+                } else {
+                  isMoving = false;
+                  hasRolledDouble = false;
+                  endTurn("Niente doppio.");
+                }
+              }
+            } else {
+              startMoving(total);
+            }
+          }
+        }, 50);
+      }
+
+      function startMoving(total) {
+        let p = getP();
+        let stepsTaken = 0;
+        const moveInterval = setInterval(function () {
+          let oldPos = p.position;
+          p.position = (p.position + 1) % 40;
+          if (p.position < oldPos) p.money += 200;
+          updateTokens();
+          stepsTaken++;
+          if (stepsTaken === total) {
+            clearInterval(moveInterval);
+            setTimeout(function () {
+              processLanding();
+            }, 300);
+          }
+        }, 300);
+      }
+
+      function processLanding() {
+        let p = getP();
+        let pos = p.position;
+        let prop = properties[pos];
+        let log = document.getElementById("game-log");
+
+        let isMyTurn =
+          gameMode === "single" || (gameMode === "multi" && p.id === socket.id);
+
+        if (prop) {
+          if (prop.owner === null) {
+            if (p.isBot) {
+              let buyChance =
+                botDifficulty === "facile"
+                  ? 0.3
+                  : botDifficulty === "medio"
+                  ? 0.6
+                  : 1.0;
+              if (p.money >= prop.price && Math.random() <= buyChance) {
+                p.money -= prop.price;
+                prop.owner = p.id;
+                document.getElementById("tile-" + pos).style.boxShadow =
+                  "inset 0 0 10px " + p.color;
+                endTurn(p.name + " compra <b>" + prop.name + "</b>.");
+              } else endTurn(p.name + " passa.");
+            } else if (isMyTurn) {
+              log.innerHTML =
+                "Sei su <b>" + prop.name + "</b><br>Costa " + prop.price + "€.";
+              setRightAction(
+                "<div style='display:flex; gap:10px; height: 100%; width: 100%;'>" +
+                  "<button class='btn secondary' id='btn-pass' onclick='fineTurnoProtetto()'>PASSA (10s)</button>" +
+                  "<button class='btn' style='background: #3b7a3b; color: white; border-color: #2a5a2a;' onclick=\"azioneUmanaProtetta('buy')\">COMPRA<br>" +
+                  prop.price +
+                  "€</button>" +
+                  "</div>"
+              );
+              avviaTimer("btn-pass", 10, fineTurnoProtetto);
+            } else {
+              setRightAction(
+                "<button class='btn secondary' disabled>Turno di " +
+                  p.name +
+                  "...</button>"
+              );
+              log.innerHTML = p.name + " sta decidendo su " + prop.name + "...";
+            }
+          } else if (prop.owner === p.id) {
+            if (
+              isMyTurn &&
+              !p.isBot &&
+              hasMonopoly(p.id, prop.group) &&
+              prop.houses < 5 &&
+              prop.group !== "stazione" &&
+              prop.group !== "societa"
+            ) {
+              log.innerHTML = "Tua proprietà: <b>" + prop.name + "</b>";
+              setRightAction(
+                "<div style='display:flex; gap:10px; height: 100%; width: 100%;'>" +
+                  "<button class='btn secondary' id='btn-pass' onclick='fineTurnoProtetto()'>PASSA (10s)</button>" +
+                  "<button class='btn' style='background: #c99c51;' onclick=\"azioneUmanaProtetta('build')\">COSTRUISCI<br>" +
+                  prop.houseCost +
+                  "€</button>" +
+                  "</div>"
+              );
+              avviaTimer("btn-pass", 10, fineTurnoProtetto);
+            } else if (isMyTurn || p.isBot) {
+              endTurn(
+                p.isBot ? p.name + " riposa." : "Sei sulla tua proprietà."
+              );
+            }
+          } else {
+            let rent = calculateRent(pos);
+            let owner = players.find(function (pl) {
+              return pl.id === prop.owner;
+            });
+            if (p.isBot) {
+              p.money -= rent;
+              if (owner) owner.money += rent;
+              endTurn(p.name + " paga " + rent + "€ a " + owner.name + ".");
+            } else if (isMyTurn) {
+              currentDebt = rent;
+              log.innerHTML =
+                "Proprietà di " + owner.name + ". Paga <b>" + rent + "€</b>.";
+              setRightAction(
+                "<button class='btn' id='btn-pay' style='background: #bd2a2a; color: white;' onclick=\"azioneUmanaProtetta('pay')\">PAGA E PASSA (" +
+                  rent +
+                  "€) (10s)</button>"
+              );
+              avviaTimer("btn-pay", 10, function () {
+                azioneUmanaProtetta("pay");
+              });
+            }
+          }
+        } else {
+          if (pos === 4) {
+            if (p.isBot) {
+              p.money -= 50;
+              endTurn(p.name + " paga la spazzatura.");
+            } else if (isMyTurn) {
+              currentDebt = 50;
+              log.innerHTML = "Paga la spazzatura.";
+              setRightAction(
+                "<button class='btn' id='btn-pay' style='background: #bd2a2a; color: white;' onclick=\"azioneUmanaProtetta('pay')\">PAGA 50€ (10s)</button>"
+              );
+              avviaTimer("btn-pay", 10, function () {
+                azioneUmanaProtetta("pay");
+              });
+            }
+          } else if (pos === 38) {
+            if (p.isBot) {
+              p.money -= 100;
+              endTurn(p.name + " è stato rapinato.");
+            } else if (isMyTurn) {
+              currentDebt = 100;
+              log.innerHTML = "Rapina!";
+              setRightAction(
+                "<button class='btn' id='btn-pay' style='background: #bd2a2a; color: white;' onclick=\"azioneUmanaProtetta('pay')\">PAGA 100€ (10s)</button>"
+              );
+              avviaTimer("btn-pay", 10, function () {
+                azioneUmanaProtetta("pay");
+              });
+            }
+          } else if (pos === 30) {
+            if (isMyTurn || p.isBot) {
+              p.position = 10;
+              p.inJail = true;
+              p.jailTurns = 0;
+              hasRolledDouble = false;
+              updateTokens();
+              endTurn(p.name + " va in Prigione!");
+            }
+          } else if (pos === 7 || pos === 22 || pos === 36) {
+            if (p.isBot) {
+              let c =
+                mazzoSperiamoBene[
+                  Math.floor(Math.random() * mazzoSperiamoBene.length)
+                ];
+              c.action(p);
+              endTurn(p.name + " pesca Speriamo Bene: " + c.text);
+            } else if (isMyTurn) {
+              pescaCarta(mazzoSperiamoBene, "Speriamo Bene");
+            }
+          } else if (pos === 2 || pos === 17 || pos === 33) {
+            if (p.isBot) {
+              let c =
+                mazzoVediamoCheSuccede[
+                  Math.floor(Math.random() * mazzoVediamoCheSuccede.length)
+                ];
+              c.action(p);
+              if (!p.inJail) endTurn(p.name + " pesca: " + c.text);
+              else {
+                hasRolledDouble = false;
+                endTurn(p.name + " è andato in prigione!");
+              }
+            } else if (isMyTurn) {
+              pescaCarta(mazzoVediamoCheSuccede, "Vediamo che succede");
+            }
+          } else {
+            if (isMyTurn || p.isBot)
+              endTurn(p.name + " si ferma su " + tileNames[pos] + ".");
+          }
+        }
+      }
+
+      window.mostraInfoTerreno = function (pos) {
+        let prop = properties[pos];
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+
+        if (prop) {
+          let ownerName = "Banca (Libero)";
+          let ownerColor = "#aaa";
+          if (prop.owner !== null) {
+            let p = players.find(function (pl) { return String(pl.id) === String(prop.owner); });
+            if (p) { ownerName = p.name; ownerColor = p.color; }
+          }
+
+          let infoHtml = "<h3 style='color: " + (prop.group === 'stazione' || prop.group === 'societa' ? '#fff' : 'var(--border-color)') + ";'>" + prop.name + "</h3>";
+          infoHtml += "<p style='margin-bottom:10px;'><b>Proprietario:</b> <span style='color:" + ownerColor + "'>" + ownerName + "</span></p>";
+          infoHtml += "<p><b>Costo Acquisto:</b> " + prop.price + "€</p>";
+          
+          if (prop.group !== 'stazione' && prop.group !== 'societa') {
+              infoHtml += "<div style='background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; margin-top:10px; text-align:left; font-size:0.9rem;'>";
+              infoHtml += "<p>Affitto base: " + prop.rent + "€</p>";
+              infoHtml += "<p>Con 1 Casa: " + (prop.rent * 5) + "€</p>";
+              infoHtml += "<p>Con 2 Case: " + (prop.rent * 15) + "€</p>";
+              infoHtml += "<p>Con 3 Case: " + (prop.rent * 40) + "€</p>";
+              infoHtml += "<p>Con 4 Case: " + (prop.rent * 50) + "€</p>";
+              infoHtml += "<p style='color:#ff4444; font-weight:bold;'>Con Albergo: " + (prop.rent * 60) + "€</p>";
+              infoHtml += "<hr style='border:1px solid #444; margin: 8px 0;'>";
+              infoHtml += "<p>Costo per Casa: " + prop.houseCost + "€</p>";
+              infoHtml += "</div>";
+          } else if (prop.group === 'stazione') {
+              infoHtml += "<div style='background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; margin-top:10px; text-align:left; font-size:0.9rem;'>";
+              infoHtml += "<p>Affitto con 1 Stazione: 25€</p>";
+              infoHtml += "<p>Affitto con 2 Stazioni: 50€</p>";
+              infoHtml += "<p>Affitto con 3 Stazioni: 100€</p>";
+              infoHtml += "<p style='color:#ff4444; font-weight:bold;'>Affitto con 4 Stazioni: 200€</p>";
+              infoHtml += "</div>";
+          } else if (prop.group === 'societa') {
+              infoHtml += "<div style='background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; margin-top:10px; text-align:left; font-size:0.9rem;'>";
+              infoHtml += "<p>Affitto con 1 Società: 20€</p>";
+              infoHtml += "<p style='color:#ff4444; font-weight:bold;'>Affitto con 2 Società: 50€</p>";
+              infoHtml += "</div>";
+          }
+
+          content.innerHTML = infoHtml + "<button class='btn secondary' style='margin-top:15px; width:100%;' onclick='closeModal()'>CHIUDI</button>";
+        } else {
+          let name = tileNames[pos];
+          content.innerHTML = "<h3 style='color:white;'>" + name + "</h3><p>Casella speciale del tabellone.</p><button class='btn secondary' style='margin-top:15px; width:100%;' onclick='closeModal()'>CHIUDI</button>";
+        }
+        modal.style.display = "flex";
+      };
+
+      function pescaCarta(mazzo, titolo) {
+        const carta = mazzo[Math.floor(Math.random() * mazzo.length)];
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+        content.innerHTML =
+          "<h3>" + titolo + "</h3>" +
+          "<p style='font-size: 1.1rem; margin-bottom: 20px;'>" + carta.text + "</p>" +
+          "<button class='btn' id='btn-modal-ok' style='width: 100%;' onclick=\"eseguiCartaEChiudi(" +
+          mazzo.indexOf(carta) + ", '" + (titolo === "Speriamo Bene" ? "SB" : "VCS") + "')\">OK, CONTINUA (10s)</button>";
+        modal.style.display = "flex";
+        
+        // IL NOSTRO PIPER LEGGE LA CARTA!
+        leggiTesto(titolo + ". " + carta.text);
+
+        avviaTimer("btn-modal-ok", 10, function () {
+          eseguiCartaEChiudi(
+            mazzo.indexOf(carta),
+            titolo === "Speriamo Bene" ? "SB" : "VCS"
+          );
+        });
+      }
+
+      window.eseguiCartaEChiudi = function (index, tipo) {
+        bloccaTimer();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel(); // Blocca la voce se premi OK!
+        
+        const carta = tipo === "SB" ? mazzoSperiamoBene[index] : mazzoVediamoCheSuccede[index];
+        let p = getP();
+        carta.action(p);
+        updateTokens();
+        closeModal();
+        if (!p.inJail) {
+          endTurn("Hai pescato: " + carta.text);
+        } else {
+          hasRolledDouble = false;
+          endTurn("Sei andato in prigione!");
+        }
+      };
+
+      function humanAction(action) {
+        let p = getP();
+        let prop = properties[p.position];
+        if (action === "buy") {
+          if (p.money >= prop.price) {
+            p.money -= prop.price;
+            prop.owner = p.id;
+            document.getElementById("tile-" + p.position).style.boxShadow =
+              "inset 0 0 10px " + p.color;
+            endTurn("Hai comprato " + prop.name + "!");
+          } else alert("Fondi insufficienti.");
+        } else if (action === "build") {
+          if (p.money >= prop.houseCost) {
+            p.money -= prop.houseCost;
+            prop.houses++;
+            updateHousesDisplay(p.position);
+            endTurn("Hai costruito su " + prop.name + "!");
+          } else alert("Fondi insufficienti.");
+        } else if (action === "pay") {
+          p.money -= currentDebt;
+          if (prop && prop.owner !== null) {
+            let owner = players.find(function (pl) {
+              return pl.id === prop.owner;
+            });
+            if (owner) owner.money += currentDebt;
+          }
+          currentDebt = 0;
+          updateTokens();
+          endTurn("Pagamento effettuato.");
+        }
+      }
+
+      function endTurn(msg) {
+        bloccaTimer();
+        isMoving = false;
+        let p = getP();
+
+        if (p.money < 0 && !p.bankrupt) {
+          p.bankrupt = true;
+          hasRolledDouble = false;
+          msg = "☠️ <b>" + p.name + " È IN BANCAROTTA!</b> Fuori dai giochi!";
+          Object.keys(properties).forEach(function (k) {
+            if (properties[k].owner === p.id) {
+              properties[k].owner = null;
+              properties[k].houses = 0;
+              document.getElementById("tile-" + k).style.boxShadow = "none";
+              let badge = document
+                .getElementById("tile-" + k)
+                .querySelector(".property-badge");
+              if (badge) badge.remove();
+            }
+          });
+          updateTokens();
+        }
+
+        document.getElementById("game-log").innerHTML = msg;
+        setRightAction(
+          "<button class='btn secondary' disabled>Passaggio turno...</button>"
+        );
+
+        if (gameMode === "multi" && socket) {
+          socket.emit("syncAction", {
+            room: myRoom,
+            players: players,
+            properties: properties,
+            logMsg: msg,
+          });
+          if (p.id === socket.id) {
+            setTimeout(function () {
+              socket.emit("endTurn", { room: myRoom });
+            }, 2000);
+          }
+        } else {
+          setTimeout(function () {
+            if (hasRolledDouble && !p.bankrupt && !p.inJail) {
+              hasRolledDouble = false;
+              startTurnFlow();
+            } else {
+              hasRolledDouble = false;
+              currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+              startTurnFlow();
+            }
+          }, 2500);
+        }
+      }
+
+      function payJail() {
+        let p = getP();
+        if (p.money >= 200) {
+          p.money -= 200;
+          p.inJail = false;
+          p.jailTurns = 0;
+          updateTokens();
+          startTurnFlow();
+        } else alert("Non hai 200€!");
+      }
+
+      function hasMonopoly(owner, group) {
+        let g = Object.values(properties).filter(function (p) {
+          return p.group === group;
+        });
+        return (
+          g.length > 0 &&
+          g.every(function (p) {
+            return p.owner === owner;
+          })
+        );
+      }
+
+      function calculateRent(pos) {
+        let prop = properties[pos];
+        let owner = prop.owner;
+
+        // Conta quante carte di questo specifico gruppo possiede il giocatore
+        let countOwned = Object.values(properties).filter(function (p) {
+          return p.group === prop.group && p.owner === owner;
+        }).length;
+
+        // Regola speciale per le Stazioni: 25 -> 50 -> 100 -> 200
+        if (prop.group === "stazione") {
+          if (countOwned === 1) return 25;
+          if (countOwned === 2) return 50;
+          if (countOwned === 3) return 100;
+          if (countOwned === 4) return 200;
+        }
+
+        // Regola speciale per le Società (Luce / Acqua)
+        if (prop.group === "societa") {
+          if (countOwned === 1) return 20;
+          if (countOwned === 2) return 50; // Il prezzo sale se le hai entrambe
+        }
+
+        // Regole per i Terreni normali (Case e Alberghi)
+        let base = prop.rent;
+        if (prop.houses === 0)
+          return hasMonopoly(owner, prop.group) ? base * 2 : base;
+          
+        return (
+          base *
+          (prop.houses === 1
+            ? 5
+            : prop.houses === 2
+            ? 15
+            : prop.houses === 3
+            ? 40
+            : prop.houses === 4
+            ? 50
+            : 60)
+        );
+      }
+
+      function updateHousesDisplay(pos) {
+        let prop = properties[pos];
+        let tile = document.getElementById("tile-" + pos);
+        let badge = tile.querySelector(".property-badge");
+        if (!badge) {
+          badge = document.createElement("div");
+          badge.className = "property-badge";
+          tile.appendChild(badge);
+        }
+        badge.innerText = prop.houses === 5 ? "🏨" : "🏠".repeat(prop.houses);
+        badge.style.color = prop.houses === 5 ? "#ff4444" : "#44ff44";
+      }
+
+      function getMiniCardHtml(k, p, prefix) {
+        let headerClass =
+          p.group !== "stazione" && p.group !== "societa" ? "c-" + p.group : "";
+        let headerStyle = headerClass
+          ? "height: 15px; border-bottom: 2px solid var(--border-color);"
+          : "height: 15px;";
+        return (
+          "<label class='mini-card-wrapper'>" +
+          "<input type='checkbox' id='" +
+          prefix +
+          "-" +
+          k +
+          "' value='" +
+          k +
+          "'>" +
+          "<div class='mini-card'><div class='" +
+          headerClass +
+          "' style='" +
+          headerStyle +
+          " width: 100%;'></div>" +
+          "<div style='padding: 2px; text-align: center; display: flex; flex-direction: column; justify-content: space-between; height: 100%;'>" +
+          "<b>" +
+          p.name +
+          "</b><span style='font-size: 0.5rem; color: #aaa;'>" +
+          p.price +
+          "€</span></div></div></label>"
+        );
+      }
+
+      function openInventoryAndTrade() {
+        const mioP = players.find(function (pl) {
+          return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+        });
+        if (!mioP || mioP.bankrupt) return;
+        const pId = mioP.id;
+
+        const mieCarte = Object.entries(properties).filter(function (entry) {
+          return String(entry[1].owner) === String(pId);
+        });
+        let mieHtml =
+          mieCarte.length > 0
+            ? mieCarte
+                .map(function (entry) {
+                  return getMiniCardHtml(entry[0], entry[1], "mycard");
+                })
+                .join("")
+            : "<i style='margin:auto;'>Nessuna carta.</i>";
+
+        let avversariAttivi = players.filter(function (pl) {
+          return String(pl.id) !== String(pId) && !pl.bankrupt;
+        });
+        let botSelectHtml = avversariAttivi
+          .map(function (pl) {
+            return "<option value='" + pl.id + "'>" + pl.name + "</option>";
+          })
+          .join("");
+
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+        content.innerHTML =
+          "<h3>Scambi e Vendita</h3><p style='font-size:0.85rem; margin-bottom:5px;'>Scegli l'avversario:</p>" +
+          "<select class='trade-select' id='trade-target' onchange='renderBotCards()'>" +
+          botSelectHtml +
+          "</select>" +
+          "<div style='display:flex; gap:10px; margin-bottom: 10px; flex-direction: column; @media(min-width: 400px){flex-direction:row;}'>" +
+          "<div style='flex:1;'><h4 style='color:#44ff44; font-size:0.9rem; margin-bottom: 5px;'>LE TUE CARTE</h4><div class='trade-list'>" +
+          mieHtml +
+          "</div>" +
+          "<div style='margin: 5px 0; font-size: 0.9rem;'><label style='color: #44ff44; font-weight: bold;'>Offri contanti: </label>" +
+          "<input type='number' id='trade-offer-money' value='0' style='width: 80px; padding: 5px; border-radius: 4px; border: none; font-weight: bold; text-align:center;'> €</div></div>" +
+          "<div style='flex:1;'><h4 style='color:#ff4444; font-size:0.9rem; margin-bottom: 5px;'>CARTE SUE</h4><div class='trade-list' id='bot-cards-list'></div>" +
+          "<div style='margin: 5px 0; font-size: 0.9rem;'><label style='color: gold; font-weight: bold;'>Richiedi contanti: </label>" +
+          "<input type='number' id='trade-request-money' value='0' style='width: 80px; padding: 5px; border-radius: 4px; border: none; font-weight: bold; text-align:center;'> €</div></div></div>" +
+          "<div style='display:flex; gap:10px; margin-bottom: 10px;'>" +
+          "<button class='btn' style='flex:1; font-size:0.75rem;' onclick='proposeTrade()'>🤝 PROPONI SCAMBIO</button>" +
+          "<button class='btn' style='flex:1; background:#c99c51; font-size:0.75rem;' onclick='buildFromInventory()'>🔨 COSTRUISCI (Seleziona Carta)</button>" +
+          "</div>" +
+          "<button class='btn secondary' style='width: 100%;' onclick='closeModal()'>ANNULLA</button>";
+
+        modal.style.display = "flex";
+        if (avversariAttivi.length > 0) renderBotCards();
+      }
+
+      window.renderBotCards = function () {
+        const targetId = document.getElementById("trade-target").value;
+        const sueCarte = Object.entries(properties).filter(function (entry) {
+          return String(entry[1].owner) === String(targetId);
+        });
+        document.getElementById("bot-cards-list").innerHTML =
+          sueCarte.length > 0
+            ? sueCarte
+                .map(function (entry) {
+                  return getMiniCardHtml(entry[0], entry[1], "botcard");
+                })
+                .join("")
+            : "<i style='margin:auto;'>Nessuna carta.</i>";
+      };
+
+      window.proposeTrade = function () {
+        const targetId = document.getElementById("trade-target").value;
+        const targetName = players.find(function (p) {
+          return String(p.id) === String(targetId);
+        }).name;
+
+        let mySelected = Array.from(
+          document.querySelectorAll('input[id^="mycard-"]:checked')
+        ).map(function (cb) {
+          return cb.value;
+        });
+        let hisSelected = Array.from(
+          document.querySelectorAll('input[id^="botcard-"]:checked')
+        ).map(function (cb) {
+          return cb.value;
+        });
+        let offerMoney =
+          parseInt(document.getElementById("trade-offer-money").value) || 0;
+        let requestMoney =
+          parseInt(document.getElementById("trade-request-money").value) || 0;
+
+        if (
+          mySelected.length === 0 &&
+          hisSelected.length === 0 &&
+          offerMoney === 0 &&
+          requestMoney === 0
+        ) {
+          alert("Inserisci una richiesta o un'offerta valida!");
+          return;
+        }
+
+        let botPlayer = players.find(function (p) {
+          return String(p.id) === String(targetId);
+        });
+        let mioP = players.find(function (pl) {
+          return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+        });
+
+        if (mioP.money < offerMoney) {
+          alert("Non hai abbastanza soldi da offrire!");
+          return;
+        }
+        if (botPlayer.money < requestMoney) {
+          alert(targetName + " non ha abbastanza soldi in contanti!");
+          return;
+        }
+
+        let offerta = {
+          mySelected: mySelected,
+          hisSelected: hisSelected,
+          offerMoney: offerMoney,
+          requestMoney: requestMoney,
+          fromId: mioP.id,
+          fromName: mioP.name,
+        };
+
+        if (botPlayer.isBot) {
+          let myValue =
+            mySelected.reduce(function (sum, k) {
+              return sum + properties[k].price;
+            }, 0) + offerMoney;
+          let hisValue =
+            hisSelected.reduce(function (sum, k) {
+              return sum + properties[k].price;
+            }, 0) + requestMoney;
+
+          if (myValue >= hisValue * 0.7) {
+            botPlayer.money -= requestMoney;
+            botPlayer.money += offerMoney;
+            mioP.money += requestMoney;
+            mioP.money -= offerMoney;
+            mySelected.forEach(function (k) {
+              properties[k].owner = targetId;
+            });
+            hisSelected.forEach(function (k) {
+              properties[k].owner = mioP.id;
+              document.getElementById("tile-" + k).style.boxShadow =
+                "inset 0 0 10px " + mioP.color;
+            });
+            updateTokens();
+            alert(targetName + " accetta! Scambio effettuato.");
+          } else {
+            alert(
+              targetName + " rifiuta. L'offerta non è conveniente per lui!"
+            );
+          }
+          closeModal();
+        } else {
+          if (socket) {
+            socket.emit("sendTradeOffer", {
+              room: myRoom,
+              targetId: targetId,
+              offerta: offerta,
+            });
+            closeModal();
+            alert(
+              "Proposta inviata a " + targetName + ". In attesa di risposta..."
+            );
+          }
+        }
+      };
+
+      window.mostraPopupRicezioneScambio = function (data) {
+        bloccaTimer();
+        window.tempTradeData = data;
+        let testoMieCarte =
+          data.offerta.hisSelected
+            .map(function (k) {
+              return properties[k].name;
+            })
+            .join(", ") || "Nessuna";
+        let testoSueCarte =
+          data.offerta.mySelected
+            .map(function (k) {
+              return properties[k].name;
+            })
+            .join(", ") || "Nessuna";
+
+        let testoOfferta =
+          data.offerta.offerMoney > 0
+            ? " <b>(+ " + data.offerta.offerMoney + "€ in regalo)</b>"
+            : "";
+        let testoRichiesta =
+          data.offerta.requestMoney > 0
+            ? " <b>(+ " + data.offerta.requestMoney + "€ dai tuoi fondi)</b>"
+            : "";
+
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+        content.innerHTML =
+          "<h3 style='color:#c99c51'>Scambio da " +
+          data.offerta.fromName +
+          "</h3>" +
+          "<p style='margin-bottom:10px; font-size:0.9rem;'><b>Ti offre:</b> " +
+          testoSueCarte +
+          testoOfferta +
+          "</p>" +
+          "<p style='margin-bottom:10px; font-size:0.9rem;'><b>Vuole in cambio:</b> " +
+          testoMieCarte +
+          testoRichiesta +
+          "</p>" +
+          "<div style='display:flex; gap:10px; margin-top:20px;'>" +
+          "<button class='btn' style='background:#3b7a3b' onclick='rispondiScambio(true)'>ACCETTA</button>" +
+          "<button class='btn secondary' style='color:#bd2a2a; border-color:#bd2a2a' onclick='rispondiScambio(false)'>RIFIUTA</button>" +
+          "</div>";
+        modal.style.display = "flex";
+      };
+
+      window.rispondiScambio = function (accepted) {
+        closeModal();
+        let data = window.tempTradeData;
+        let targetName = players.find(function (p) {
+          return String(p.id) === String(socket.id);
+        }).name;
+        socket.emit("tradeAnswer", {
+          room: myRoom,
+          targetId: socket.id,
+          targetName: targetName,
+          offerta: data.offerta,
+          accepted: accepted,
+        });
+        avviaTimer("btn-pass", 10, fineTurnoProtetto);
+      };
+
+      window.buildFromInventory = function() {
+        const mioP = players.find(function(pl) { return String(pl.id) === String(gameMode === "multi" ? socket.id : 0); });
+        let mySelected = Array.from(document.querySelectorAll('input[id^="mycard-"]:checked')).map(function (cb) { return cb.value; });
+
+        if (mySelected.length !== 1) {
+          alert("Devi selezionare ESATTAMENTE UNA delle tue carte per poterci costruire sopra!");
+          return;
+        }
+
+        let pos = mySelected[0];
+        let prop = properties[pos];
+
+        if (prop.group === "stazione" || prop.group === "societa") {
+          alert("Non puoi costruire su Stazioni o Società!");
+          return;
+        }
+
+        if (!hasMonopoly(mioP.id, prop.group)) {
+          alert("Devi possedere TUTTI i terreni di questo colore per poter costruire!");
+          return;
+        }
+
+        if (prop.houses >= 5) {
+          alert("Hai già un Albergo qui! Spazio esaurito.");
+          return;
+        }
+
+        if (mioP.money < prop.houseCost) {
+          alert("Non hai abbastanza soldi! Costa " + prop.houseCost + "€.");
+          return;
+        }
+
+        mioP.money -= prop.houseCost;
+        prop.houses++;
+        updateHousesDisplay(pos);
+        updateTokens();
+
+        if (gameMode === "multi" && socket) {
+          socket.emit("syncAction", {
+            room: myRoom,
+            players: players,
+            properties: properties,
+            logMsg: mioP.name + " ha costruito su " + prop.name + "!"
+          });
+        }
+        
+        alert("Hai costruito con successo su " + prop.name + "!");
+        closeModal();
+        openInventoryAndTrade(); 
+      };
+
+      function closeModal() {
+        document.getElementById("modal-overlay").style.display = "none";
+      }
+
+      let myPeer = null;
+      let myAudioStream = null;
+
+      function accendiMicrofono() {
+        let btnMic = document.getElementById("btn-voice");
+
+        // SE E' GIA' CONNESSO, FUNZIONA DA INTERRUTTORE ON/OFF (MUTO)
+        if (myPeer && myAudioStream) {
+          let audioTrack = myAudioStream.getAudioTracks()[0];
+          audioTrack.enabled = !audioTrack.enabled; // Inverte lo stato (Muto/Smuto)
+          
+          if (audioTrack.enabled) {
+            btnMic.style.background = "#3b7a3b";
+            btnMic.style.borderColor = "#2a5a2a";
+            btnMic.innerHTML = "🎤 AUDIO ON";
+          } else {
+            btnMic.style.background = "#bd2a2a";
+            btnMic.style.borderColor = "#7a1515";
+            btnMic.innerHTML = "🔇 MUTO";
+          }
+          return;
+        }
+        
+        // PRIMA CONNESSIONE
+        myPeer = new Peer({
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' }
+            ]
+          }
+        });
+
+        navigator.mediaDevices
+          .getUserMedia({ video: false, audio: true })
+          .then(function (stream) {
+            myAudioStream = stream;
+            document.getElementById("game-log").innerHTML = "🎤 Microfono collegato!";
+
+            if (btnMic) {
+              btnMic.style.background = "#3b7a3b";
+              btnMic.style.borderColor = "#2a5a2a";
+              btnMic.innerHTML = "🎤 AUDIO ON";
+            }
+
+            myPeer.on("call", function (call) {
+              call.answer(myAudioStream);
+              call.on("stream", function (userAudioStream) {
+                aggiungiAudioPlayer(call.peer, userAudioStream);
+              });
+            });
+
+            myPeer.on("open", function (id) {
+              if (socket) socket.emit("voiceReady", { room: myRoom, peerId: id });
+            });
+          })
+          .catch(function (err) {
+            alert("Devi dare il permesso al microfono se vuoi parlare in partita!");
+            myPeer = null; // Resetta per permettere di riprovare
+          });
+      }
+
+      function aggiungiAudioPlayer(peerId, stream) {
+        if (!document.getElementById("audio-" + peerId)) {
+          const audio = document.createElement("audio");
+          audio.id = "audio-" + peerId;
+          audio.srcObject = stream;
+          audio.autoplay = true;
+          audio.playsInline = true; 
+          audio.controls = true;
+          audio.style.width = "100%";
+          audio.style.height = "30px";
+          audio.style.marginTop = "5px";
+
+          let container = document.getElementById("audio-container");
+          container.style.display = "block";
+          container.style.position = "absolute";
+          container.style.top = "10px";
+          container.style.left = "10px";
+          container.style.zIndex = "999";
+          container.style.background = "rgba(0,0,0,0.8)";
+          container.style.padding = "5px";
+          container.style.borderRadius = "8px";
+
+          container.appendChild(audio);
+
+          let playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(function (e) {
+              console.log(
+                "Audio bloccato dal browser. Sblocco automatico al primo click.",
+                e
+              );
+              // Sblocca al primo click sullo schermo
+              document.addEventListener("click", function sbloccaAudio() {
+                audio.play();
+                document.removeEventListener("click", sbloccaAudio);
+              });
+            });
+          }
+        }
+      }
+
+      window.dichiaraBancarottaManuale = function () {
+        if (
+          !confirm(
+            "Sei sicuro di voler dichiarare bancarotta e ritirarti dalla partita?"
+          )
+        )
+          return;
+        bloccaTimer();
+        let mioP = players.find(function (pl) {
+          return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+        });
+        if (!mioP || mioP.bankrupt) return;
+
+        mioP.bankrupt = true;
+        mioP.money = -1; // Per sicurezza
+
+        Object.keys(properties).forEach(function (k) {
+          if (String(properties[k].owner) === String(mioP.id)) {
+            properties[k].owner = null;
+            properties[k].houses = 0;
+            let tile = document.getElementById("tile-" + k);
+            if (tile) tile.style.boxShadow = "none";
+            let badge = tile ? tile.querySelector(".property-badge") : null;
+            if (badge) badge.remove();
+          }
+        });
+        updateTokens();
+
+        let msg = "🏳️ <b>" + mioP.name + " SI È ARRESO (BANCAROTTA)!</b>";
+        document.getElementById("game-log").innerHTML = msg;
+
+        if (gameMode === "multi" && socket) {
+          socket.emit("syncAction", {
+            room: myRoom,
+            players: players,
+            properties: properties,
+            logMsg: msg,
+          });
+          setTimeout(function () {
+            socket.emit("endTurn", { room: myRoom });
+          }, 2000);
+        } else {
+          setTimeout(function () {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            startTurnFlow();
+          }, 2000);
+        }
+      };
+
+      window.addEventListener("resize", function () {
+        if (document.getElementById("game-ui").style.display === "flex")
+          updateTokens();
+      });
+    </script>
+  </body>
+</html>
