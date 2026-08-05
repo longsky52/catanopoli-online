@@ -2154,11 +2154,14 @@
 
       function quitGame() {
         if (socket) socket.disconnect();
-        socket = null;
-        bloccaTimer();
-        document.getElementById("game-ui").style.display = "none";
-        document.getElementById("waiting-room-menu").style.display = "none";
-        document.getElementById("main-menu").style.display = "flex";
+        if (typeof myPeer !== 'undefined' && myPeer) myPeer.destroy();
+        if (typeof myAudioStream !== 'undefined' && myAudioStream) {
+            myAudioStream.getTracks().forEach(track => track.stop());
+        }
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        
+        // Questo riavvia istantaneamente la pagina, uccidendo audio e timer in background!
+        window.location.reload(); 
       }
 
       function getP() {
@@ -2828,7 +2831,7 @@
           
           msg = "☠️ <b>" + p.name + " È IN BANCAROTTA!</b> Fuori dai giochi!";
           Object.keys(properties).forEach(function (k) {
-            if (properties[k].owner === p.id) {
+            if (String(properties[k].owner) === String(p.id)) {
               properties[k].owner = null;
               properties[k].houses = 0;
               document.getElementById("tile-" + k).style.boxShadow = "none";
@@ -2855,7 +2858,14 @@
           });
           if (p.id === socket.id) {
             setTimeout(function () {
-              socket.emit("endTurn", { room: myRoom });
+              // 🔥 FIX MULTIPLAYER: SE FAI DOPPIO, TIRI DI NUOVO INVECE DI PASSARE IL TURNO
+              if (hasRolledDouble && !p.bankrupt && !p.inJail) {
+                hasRolledDouble = false;
+                startTurnFlow(); 
+              } else {
+                hasRolledDouble = false;
+                socket.emit("endTurn", { room: myRoom }); 
+              }
             }, 2000);
           }
         } else {
