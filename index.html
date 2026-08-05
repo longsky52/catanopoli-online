@@ -600,55 +600,56 @@
       /* EFFETTO 3D, NEON E PROSPETTIVA ISOMETRICA */
       /* ========================================= */
       
-      /* Crea la profondità spaziale nello schermo */
       #game-wrapper {
-        perspective: 1000px; 
+        perspective: 1200px; 
       }
       
-      /* Inclina il tabellone all'indietro come un vero tavolo da gioco e lo fa respirare */
       .board {
-        transform: rotateX(10deg) scale(0.98); 
+        transform: rotateX(6deg) scale(0.98); /* Inclinazione più dolce per facilitare i click */
         transform-style: preserve-3d;
         border: 4px solid var(--border-color) !important;
         border-radius: 12px !important;
         animation: respiroNeon 3.5s infinite alternate ease-in-out;
       }
       
-      /* L'animazione del neon dorato che pulsa */
       @keyframes respiroNeon {
         0% { 
           box-shadow: 0 15px 30px rgba(0,0,0,0.8), 0 0 10px var(--border-color); 
-          transform: rotateX(10deg) scale(0.98) translateY(0px); 
+          transform: rotateX(6deg) scale(0.98) translateY(0px); 
         }
         100% { 
           box-shadow: 0 25px 45px rgba(0,0,0,1), 0 0 25px var(--border-color), 0 0 40px #c99c51; 
-          transform: rotateX(11.5deg) scale(0.99) translateY(-3px); 
+          transform: rotateX(7.5deg) scale(0.99) translateY(-2px); 
         }
       }
 
-      /* Effetto Rilievo "Tasto" su tutte le caselle (Spessore 3D) */
+      /* FIX MAGICO DEI CLICK SULLE CASELLE */
       .tile {
         box-shadow: inset -2px -2px 6px rgba(0,0,0,0.4), inset 2px 2px 6px rgba(255,255,255,0.7) !important;
-        transition: filter 0.2s, transform 0.2s;
+        transition: filter 0.1s, transform 0.1s;
+        pointer-events: auto !important;
+        z-index: 5;
+        touch-action: manipulation;
       }
       
-      /* Effetto di pressione quando clicchi una casella dal telefono */
       .tile:active {
         filter: brightness(0.7);
-        transform: translateZ(-2px);
       }
 
-      /* Pedine e Facce Fluttuanti (Sembrano staccate dal tabellone) */
+      /* Assicura che i contenitori non blocchino i tocca-schermo */
+      .tokens-container {
+        pointer-events: none !important;
+      }
+
       .player-token {
-        transform: translateY(-6px) translateZ(15px) !important;
-        box-shadow: 0 12px 15px rgba(0,0,0,0.9), inset 0 0 8px rgba(255,255,255,0.8) !important;
+        transform: translateY(-4px) translateZ(10px) !important;
+        box-shadow: 0 8px 12px rgba(0,0,0,0.9) !important;
         border: 2px solid white !important;
       }
       
-      /* Lo schermo gigante al centro diventa un Ologramma sollevato */
       #center-zoom {
-        transform: translateZ(40px) !important;
-        box-shadow: 0 30px 60px rgba(0,0,0,0.9), 0 0 40px var(--border-color) !important;
+        transform: translateZ(30px) !important;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.9), 0 0 30px var(--border-color) !important;
       }
     </style>
     <script src="/socket.io/socket.io.js"></script>
@@ -1542,206 +1543,195 @@
       const mazzoSperiamoBene = [
         {
           text: "Zio Turi ti ha lasciato la mancia per l'onomastico! Ritira 50€.",
-          action: (p) => {
-            p.money += 50;
-          },
+          action: (p) => { p.money += 50; }
         },
         {
           text: "Hai venduto abusivamente i biglietti del Catania fuori dal Cibali. Incassa 100€.",
-          action: (p) => {
-            p.money += 100;
-          },
+          action: (p) => { p.money += 100; }
         },
         {
           text: "Rimborso dalla bolletta della luce per i continui distacchi. Ritira 20€.",
-          action: (p) => {
-            p.money += 20;
-          },
+          action: (p) => { p.money += 20; }
         },
         {
-          text: "Sei il re della pescheria! Hai venduto tutto il tonno. Ritira 150€.",
-          action: (p) => {
-            p.money += 150;
-          },
+          text: "Sei il re della pescheria! Hai venduto tuttu pisci. Ritira 150€.",
+          action: (p) => { p.money += 150; }
         },
         {
           text: "Sant'Agata è vicina, hai montato il banchetto del torrone e fatto affari d'oro. Incassa 100€.",
-          action: (p) => {
-            p.money += 100;
-          },
+          action: (p) => { p.money += 100; }
         },
         {
           text: "Hai trovato parcheggio subito in Via Etnea senza posteggiatore! Trovi 10€ a terra.",
-          action: (p) => {
-            p.money += 10;
-          },
+          action: (p) => { p.money += 10; }
         },
         {
           text: "Hai vinto al lotto giocato nella ricevitoria al Borgo. Ritira 200€.",
-          action: (p) => {
-            p.money += 200;
-          },
+          action: (p) => { p.money += 200; }
         },
         {
           text: "Concorso di bellezza a La Playa, hai vinto il primo premio. Ritira 50€.",
-          action: (p) => {
-            p.money += 50;
-          },
+          action: (p) => { p.money += 50; }
         },
         {
           text: "Hai affittato la casa vacanze ai turisti in Via Crociferi. Incassa 80€.",
-          action: (p) => {
-            p.money += 80;
-          },
+          action: (p) => { p.money += 80; }
         },
         {
           text: "Scommessa vinta sui cavalli alla sala corse. Prendi 60€.",
-          action: (p) => {
-            p.money += 60;
-          },
+          action: (p) => { p.money += 60; }
         },
         {
           text: "Il tuo b&b a San Giovanni Li Cuti è pieno. Ritira 100€.",
-          action: (p) => {
-            p.money += 100;
-          },
+          action: (p) => { p.money += 100; }
         },
         {
           text: "Hai fatto l'aiuto cuoco da Fud e ti hanno dato il bonus. Ritira 40€.",
-          action: (p) => {
-            p.money += 40;
-          },
+          action: (p) => { p.money += 40; }
         },
         {
           text: "Hai venduto vecchie cianfrusaglie alla Fiera dei Morti. Prendi 70€.",
-          action: (p) => {
-            p.money += 70;
-          },
+          action: (p) => { p.money += 70; }
         },
         {
           text: "Hai organizzato un torneo di calcetto al Cibalino e hai vinto la quota. Ritira 90€.",
-          action: (p) => {
-            p.money += 90;
-          },
+          action: (p) => { p.money += 90; }
         },
         {
           text: "Sei stato eletto Catanese del Mese. Premio di 150€.",
-          action: (p) => {
-            p.money += 150;
-          },
+          action: (p) => { p.money += 150; }
         },
+        // --- NUOVE CARTE AGGIUNTE ---
+        {
+          text: "Hai offerto la seltz selz limone e sale a tutta la piazza! Tutti ti ringraziano e ti regalano 30€.",
+          action: (p) => { p.money += 30; }
+        },
+        {
+          text: "Hai trovato un compratore per la tua vecchia Lapa. Incassa 120€.",
+          action: (p) => { p.money += 120; }
+        },
+        {
+          text: "Hai cucinato la migliore carne di cavallo di Via Plebiscito. Premio della critica: 80€.",
+          action: (p) => { p.money += 80; }
+        },
+        {
+          text: "Un turco ti ha scambiato per un attore famoso al Teatro Massimo e ti ha dato una mancia di 100€.",
+          action: (p) => { p.money += 100; }
+        },
+        {
+          text: "Hai organizzato una scampagnata sull'Etna e tutti hanno pagato la quota in anticipo. Prendi 110€.",
+          action: (p) => { p.money += 110; }
+        }
       ];
 
       const mazzoVediamoCheSuccede = [
         {
           text: "Hai posteggiato male al Duomo. Multa dei vigili! Paga 50€.",
-          action: (p) => {
-            p.money -= 50;
-          },
+          action: (p) => { p.money -= 50; }
         },
         {
           text: "Pioggia di cenere vulcanica dall'Etna! Devi per forza lavare la macchina. Paga 20€.",
-          action: (p) => {
-            p.money -= 20;
-          },
+          action: (p) => { p.money -= 20; }
         },
         {
           text: "Andavi troppo forte in Circonvallazione. Autovelox! Paga 100€.",
-          action: (p) => {
-            p.money -= 100;
-          },
+          action: (p) => { p.money -= 100; }
         },
         {
-          text: "Hai fumato crack alle 4 di notte ti hanno arrestato. Vai in Piazza Lanza a riposare.",
+          text: "Hai fumato crack alle 4 di notte e ti hanno beccato. Vai in Piazza Lanza a riposare.",
           action: (p) => {
             p.position = 10;
             p.inJail = true;
             p.jailTurns = 0;
-          },
+          }
         },
         {
           text: "Hai bucato una ruota nella lapa per andare ad Acitrezza. Paga 40€ dal gommista.",
-          action: (p) => {
-            p.money -= 40;
-          },
+          action: (p) => { p.money -= 40; }
         },
         {
           text: "Ti hanno clonato il bancomat in Corso Italia. Perdi 150€.",
-          action: (p) => {
-            p.money -= 150;
-          },
+          action: (p) => { p.money -= 150; }
         },
         {
           text: "Allagamento al Villaggio Santa Maria Goretti, devi riparare lo scooter. Paga 80€.",
-          action: (p) => {
-            p.money -= 80;
-          },
+          action: (p) => { p.money -= 80; }
         },
         {
           text: "Controllo a sorpresa della Finanza nel tuo chiosco. Multa di 200€.",
-          action: (p) => {
-            p.money -= 200;
-          },
+          action: (p) => { p.money -= 200; }
         },
         {
           text: "Hai fatto macello alla festa della birra, devi risarcire i danni. Paga 50€.",
-          action: (p) => {
-            p.money -= 50;
-          },
+          action: (p) => { p.money -= 50; }
         },
         {
           text: "L'AMT ha scioperato, hai dovuto prendere un taxi abusivo. Paga 30€.",
-          action: (p) => {
-            p.money -= 30;
-          },
+          action: (p) => { p.money -= 30; }
         },
         {
           text: "Hai perso il portafoglio mentre mangiavi la carne di cavallo in Via Plebiscito. Paga 60€.",
-          action: (p) => {
-            p.money -= 60;
-          },
+          action: (p) => { p.money -= 60; }
         },
         {
           text: "Riparazioni urgenti per il tuo appartamento. Paga 100€.",
-          action: (p) => {
-            p.money -= 100;
-          },
+          action: (p) => { p.money -= 100; }
         },
         {
           text: "Hai pagato troppo il pesce spada perché non hai contrattato. Paga 20€.",
-          action: (p) => {
-            p.money -= 20;
-          },
+          action: (p) => { p.money -= 20; }
         },
         {
           text: "Hai sbattuto contro il muretto al Lungomare Ognina. Carrozziere: 70€.",
-          action: (p) => {
-            p.money -= 70;
-          },
+          action: (p) => { p.money -= 70; }
         },
         {
           text: "Il vigile ti ha beccato col motorino senza casco a San Cristoforo. Multa 120€.",
-          action: (p) => {
-            p.money -= 120;
-          },
+          action: (p) => { p.money -= 120; }
         },
+        // --- NUOVE CARTE AGGIUNTE ---
+        {
+          text: "Hai dimenticato la granita al sole ed è diventata acqua calda. Compra un'altra granita: 15€.",
+          action: (p) => { p.money -= 15; }
+        },
+        {
+          text: "Il posteggiatore abusivo in Viale Jonio voleva 5€ e non avevi monete, hai dovuto dargli 10€.",
+          action: (p) => { p.money -= 10; }
+        },
+        {
+          text: "Ti si è spaccata la marmitta del motorino mentre salivi a Nicolosi. Meccanico: 90€.",
+          action: (p) => { p.money -= 90; }
+        },
+        {
+          text: "Hai preso la multa perché sei passato nella corsia del BRT senza accorgertene. Paga 70€.",
+          action: (p) => { p.money -= 70; }
+        },
+        {
+          text: "Ti sei scordato di pagare il pizzo al barista del borgo. Risarcimento: 130€.",
+          action: (p) => { p.money -= 130; }
+        }
       ];
-
       const diceFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
       // Frasario Catanese DOC per Piper
       const frasiCatanesi = [
         "Come siamo combinati fratello?",
-        "Mbare, m'u spacchi un gnustel?",
-        "Mbare, ca semu!",
+        "Vita, m'u spacchi un gnustel?",
+        "Vita, ca semu!",
         "Lancia sti dadi mbare, ca fici notte!",
         "Avviamo i mutura!",
-        "Mbare, stai facendo i soldi ca pala!",
+        "Vita, stai facendo i soldi ca pala!",
         "Sciogli i cani!",
-        "Mbare, mi sta calando un sonno, lancia!",
+        "Vita, mi sta calando un sonno, lancia!",
         "Avaia zucchero",
         "Ma chi si pazzu",
-        "A mia u sai chi ma fari"
+        "A mia u sai chi ma fari",
+        "A tia ti nesciu u giovedi indiferrenziato",
+        "Si chiu vecchiu do manicu da prefettura",
+        "animali cu l' occhi aiutiti",
+        "Fozza ca c'è me nanna o spitali sta patturennu",
+        "Ti ittassi unni iettunu i gnissaturi o vittorio",
+        "Fozza ri drocu mu collu"
       ];
 
       function renderBoard() {
