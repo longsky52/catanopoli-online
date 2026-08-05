@@ -1786,7 +1786,7 @@
         
         let rawName = document.getElementById("setup-name").value || "Lucio";
         const pToken = document.getElementById("setup-token").value;
-        const pName = pToken + " " + rawName; // Invia al server "🐘 Lucio"
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName); // Niente emoji se c'è foto!
 
         const startMoney = parseInt(document.getElementById("setup-money").value);
 
@@ -1813,13 +1813,14 @@
         
         let rawName = document.getElementById("setup-name").value || "Lucio";
         const pToken = document.getElementById("setup-token").value;
-        const pName = pToken + " " + rawName; // Invia al server "🐘 Lucio"
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName); // Niente emoji se c'è foto!
         
         const startMoney = parseInt(document.getElementById("setup-money").value);
 
         socket.emit("joinSpecificRoom", { roomName: myRoom, roomPass: roomPass, name: pName, startMoney: startMoney });
         inizializzaEventiMultiplayer();
       }
+
       function inizializzaEventiMultiplayer() {
         document.getElementById("multi-setup-menu").style.display = "none";
 
@@ -2092,22 +2093,23 @@
         const startMoney = parseInt(document.getElementById("setup-money").value);
         const pToken = document.getElementById("setup-token").value;
 
-        // MAGIA NINJA: Uniamo l'emoji al nome!
-        const pName = pToken + " " + rawName;
+        // MAGIA NINJA: Niente emoji nel nome se scatti la foto!
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
 
         const availableBotTokens = ["🐘", "🍊", "🛵", "🍧", "🌋", "⚽", "🚓"].filter(t => t !== pToken);
 
         players = [];
         players.push({
           id: 0,
-          name: pName, // Ora salva "🐘 Lucio"
+          name: pName, 
           isBot: false,
           money: startMoney,
           position: 0,
           color: colors[0],
           inJail: false,
           jailTurns: 0,
-          bankrupt: false
+          bankrupt: false,
+          photo: typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null // 🔥 QUESTA E' LA RIGA MAGICA CHE TI MANCAVA!
         });
 
         if (mode === "single") {
