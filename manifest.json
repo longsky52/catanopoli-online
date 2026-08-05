@@ -1,0 +1,22 @@
+{
+    "name": "Catanopoli Edizione Lusso",
+    "short_name": "Catanopoli",
+    "description": "Il gioco definitivo.",
+    "start_url": "./",
+    "display": "fullscreen",
+    "background_color": "#0f121a",
+    "theme_color": "#0f121a",
+    "orientation": "portrait",
+    "icons": [
+      {
+        "src": "logo-catanopoli.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "logo-catanopoli.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ]
+  }
