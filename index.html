@@ -640,6 +640,17 @@
           <option value="🚓">🚓 Pantera</option>
         </select>
       </div>
+
+      <!-- NUOVA SEZIONE FOTO FACOLTATIVA -->
+      <div class="input-group" style="text-align: center; margin-bottom: 20px;">
+        <label style="color:#44ff44;">OPPURE SCATTA UNA FOTO (Facoltativo):</label>
+        <input type="file" id="camera-input" accept="image/*" capture="user" style="display:none;" onchange="elaboraFoto(event)">
+        <button class="btn secondary" style="font-size: 0.8rem; border-color: #44ff44; color: #44ff44;" onclick="document.getElementById('camera-input').click()">
+          📸 APRI FOTOCAMERA / GALLERIA
+        </button>
+        <img id="preview-foto" src="" style="display:none; width: 60px; height: 60px; border-radius: 50%; margin: 10px auto 0; border: 2px solid var(--border-color); object-fit: cover; box-shadow: 0 0 10px rgba(0,0,0,0.8);">
+      </div>
+
       <button
         class="btn"
         style="max-width: 300px; margin-top: 10px"
@@ -1981,10 +1992,45 @@
         });
       }
 
+      // ---- MOTORE FOTO PROFILO ----
+      let myPhotoBase64 = null;
+      window.elaboraFoto = function(event) {
+        let file = event.target.files[0];
+        if (!file) return;
+        let reader = new FileReader();
+        reader.onload = function(e) {
+          let img = new Image();
+          img.onload = function() {
+            // Comprime la foto a 100x100 pixel per renderla leggerissima sul server!
+            let canvas = document.createElement("canvas");
+            let ctx = canvas.getContext("2d");
+            canvas.width = 100; canvas.height = 100;
+            let minDim = Math.min(img.width, img.height);
+            let sx = (img.width - minDim) / 2; let sy = (img.height - minDim) / 2;
+            ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 100, 100);
+            
+            myPhotoBase64 = canvas.toDataURL("image/jpeg", 0.6); // Qualità 60% (Leggera e scattante)
+            let preview = document.getElementById("preview-foto");
+            preview.src = myPhotoBase64;
+            preview.style.display = "block";
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+
       function applicaStatoGioco(serverData) {
         players = serverData.players;
         currentPlayerIndex = serverData.turnIndex;
         myPlayerId = socket.id;
+
+        // INIEZIONE FOTOGRAFIA: Se l'ho scattata, la piazzo sul mio personaggio e avviso tutti gli altri
+        let mioP = players.find(function(p) { return String(p.id) === String(socket.id || 0); });
+        let devoSincronizzareFoto = false;
+        if (mioP && myPhotoBase64 && mioP.photo !== myPhotoBase64) {
+            mioP.photo = myPhotoBase64;
+            devoSincronizzareFoto = true;
+        }
 
         Object.keys(serverData.properties).forEach(function (k) {
           properties[k].owner = serverData.properties[k].owner;
@@ -2005,8 +2051,14 @@
 
         updateTokens();
         startTurnFlow();
-      }
 
+        // Trasmette la faccia agli avversari!
+        if (devoSincronizzareFoto && gameMode === "multi" && socket) {
+            setTimeout(function() {
+                socket.emit("syncAction", { room: myRoom, players: players, properties: properties, logMsg: "📸 " + mioP.name + " ha impostato la sua foto!" });
+            }, 1000);
+        }
+      }
       function animateDice(d1, d2, callback) {
         let diceArea = document.getElementById("dice-result");
         let rollCount = 0;
@@ -2123,7 +2175,17 @@
             let t = document.createElement("div");
             t.className = "player-token";
             t.style.backgroundColor = p.color;
-            t.innerHTML = p.token && p.token !== "undefined" ? p.token : fallbackTokens[index % fallbackTokens.length];
+            
+            // SE IL GIOCATORE HA FATTO LA FOTO, DISEGNA LA SUA FACCIA SULLA PEDINA
+            if (p.photo) {
+              t.style.backgroundImage = "url('" + p.photo + "')";
+              t.style.backgroundSize = "cover";
+              t.style.backgroundPosition = "center";
+              t.innerHTML = ""; // Nasconde l'emoji per far spazio alla foto
+            } else {
+              t.style.backgroundImage = "none";
+              t.innerHTML = p.token && p.token !== "undefined" ? p.token : fallbackTokens[index % fallbackTokens.length];
+            }
             document.getElementById("tc-" + p.position).appendChild(t);
           }
         });
@@ -2138,12 +2200,12 @@
             "€</span>";
         }
 
-        // CLASSIFICA SOLDI PULITA (NIENTE PIÙ DOPPIA EMOJI O STANGHETTE)
+        // CLASSIFICA SOLDI CON LE FACCE!
         let sbHtml = "";
         players.forEach(function(p) {
           if(!p.bankrupt) {
-            // Usa solo p.name (l'emoji è già inclusa lì dentro!)
-            sbHtml += "<span style='color:" + p.color + "; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);'>" + p.name + ": " + p.money + "€</span>";
+            let fotoHtml = p.photo ? "<img src='" + p.photo + "' style='width:24px; height:24px; border-radius:50%; vertical-align:middle; margin-right:5px; border:2px solid " + p.color + "; object-fit:cover;'>" : "";
+            sbHtml += "<span style='color:" + p.color + "; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);'>" + fotoHtml + p.name + ": " + p.money + "€</span>";
           }
         });
         let sb = document.getElementById("scoreboard");
