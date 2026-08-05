@@ -550,6 +550,52 @@
         height: 100%;
         min-height: 55px;
       }
+
+      /* ========================================= */
+      /* FIX GRAFICA DEFINITIVO PC E MOBILE        */
+      /* ========================================= */
+      #game-ui {
+        padding-top: 75px !important; 
+        justify-content: flex-start !important;
+        overflow-y: auto !important; 
+      }
+      .board {
+        width: 100% !important;
+        max-width: min(95vw, 75vh) !important; 
+        margin-bottom: 5px !important;
+      }
+      .bottom-hud {
+        width: 100% !important;
+        max-width: min(95vw, 75vh) !important;
+        padding-bottom: 20px !important;
+      }
+      .tile { font-size: clamp(0.35rem, 1.8vw, 0.75rem) !important; }
+      .price-tag { font-size: clamp(0.3rem, 1.4vw, 0.65rem) !important; }
+      #scoreboard {
+        gap: 8px 15px !important;
+        border: none !important;
+        background: rgba(0,0,0,0.7) !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
+      }
+      #scoreboard span {
+        border: none !important; 
+        font-size: clamp(0.85rem, 3vmin, 1.1rem) !important;
+      }
+      #center-zoom {
+        width: 45% !important;
+        height: 50% !important;
+      }
+      @media (max-width: 600px) {
+        div[style*="right: 55px"] {
+          right: 45px !important;
+          transform: scale(0.8);
+          transform-origin: top right;
+        }
+        div[style*="left: 10px"] {
+          transform: scale(0.8);
+          transform-origin: top left;
+        }
+      }
     </style>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -2071,7 +2117,6 @@
           document.getElementById("tc-" + i).innerHTML = "";
         }
         
-        // Emoji di scorta in caso il server non sincronizzi le scelte in multiplayer
         const fallbackTokens = ["🐘", "🍊", "🛵", "🍧"]; 
 
         players.forEach(function (p, index) {
@@ -2079,7 +2124,6 @@
             let t = document.createElement("div");
             t.className = "player-token";
             t.style.backgroundColor = p.color;
-            // Inserisce la pedina scelta, oppure una di scorta
             t.innerHTML = p.token && p.token !== "undefined" ? p.token : fallbackTokens[index % fallbackTokens.length];
             document.getElementById("tc-" + p.position).appendChild(t);
           }
@@ -2095,19 +2139,16 @@
             "€</span>";
         }
 
-        // AGGIUNTA CLASSIFICA SOLDI SOTTO IL TABELLONE
+        // CLASSIFICA SOLDI PULITA (NIENTE PIÙ DOPPIA EMOJI O STANGHETTE)
         let sbHtml = "";
-        players.forEach(function(p, index) {
+        players.forEach(function(p) {
           if(!p.bankrupt) {
-            // Se la pedina manca dalla memoria, usa quella di scorta invece di scrivere "undefined"
-            let iconaPura = p.token && p.token !== "undefined" ? p.token : fallbackTokens[index % fallbackTokens.length];
-            
-            // L'ho staccato un po' di più per farlo vedere bene su PC con una bella ombra scura
-            sbHtml += "<span style='color:" + p.color + "; font-size:1.1rem; padding: 0 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.9); border-right: 1px solid rgba(255,255,255,0.2);'>" + iconaPura + " " + p.name + ": " + p.money + "€</span>";
+            // Usa solo p.name (l'emoji è già inclusa lì dentro!)
+            sbHtml += "<span style='color:" + p.color + "; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);'>" + p.name + ": " + p.money + "€</span>";
           }
         });
         let sb = document.getElementById("scoreboard");
-        if(sb) sb.innerHTML = sbHtml.replace(/<span(.*?)border-right: 1px solid rgba\(255,255,255,0.2\);'>(.*?)<\/span>$/, "<span$1'>$2</span>");
+        if(sb) sb.innerHTML = sbHtml;
       } // <--- PARENTESI SALVAVITA INSERITA QUI!!!
 
       function setRightAction(html) {
