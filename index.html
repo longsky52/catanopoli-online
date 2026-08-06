@@ -684,10 +684,21 @@
       </div>
       <div class="input-group">
         <label>PASSWORD:</label>
-        <input type="password" id="auth-password" placeholder="Inserisci password" />
+        <div style="position: relative;">
+          <input type="password" id="auth-password" placeholder="Inserisci password" style="padding-right: 40px;" />
+          <span id="toggle-pass-icon" onclick="togglePassword()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1.2rem;">👁️</span>
+        </div>
       </div>
       
-      <div style="display: flex; gap: 10px; width: 100%; max-width: 300px; margin-top: 10px;">
+      <!-- CHECKBOX RICORDAMI -->
+      <div class="input-group" style="margin-top: 0px; margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #ccc; margin: 0; font-size: 0.85rem; text-transform: none; font-weight: normal;">
+          <input type="checkbox" id="auth-remember" style="width: 16px; height: 16px; accent-color: #c99c51;">
+          Ricordami
+        </label>
+      </div>
+      
+      <div style="display: flex; gap: 10px; width: 100%; max-width: 300px; margin-top: 5px;">
         <button class="btn" style="flex: 1; font-size: 0.8rem;" onclick="eseguiLogin()">ACCEDI</button>
         <button class="btn secondary" style="flex: 1; font-size: 0.8rem; background: #2c4a8a; border-color: #1a2a5a; color: white;" onclick="eseguiRegistrazione()">REGISTRATI</button>
       </div>
@@ -1164,6 +1175,19 @@
         localStorage.setItem("catanopoli_utenti", JSON.stringify(utenti));
       }
 
+      // GESTIONE OCCHIETTO PASSWORD
+      window.togglePassword = function() {
+        let passInput = document.getElementById("auth-password");
+        let icon = document.getElementById("toggle-pass-icon");
+        if (passInput.type === "password") {
+          passInput.type = "text";
+          icon.innerText = "🙈"; // Scimmietta chiusa
+        } else {
+          passInput.type = "password";
+          icon.innerText = "👁️"; // Occhietto aperto
+        }
+      };
+
       window.eseguiRegistrazione = function() {
         let user = document.getElementById("auth-username").value.trim();
         let pass = document.getElementById("auth-password").value.trim();
@@ -1188,6 +1212,14 @@
           alert("❌ Username o Password errati!");
           return;
         }
+
+        // SALVATAGGIO "RICORDAMI" NEL TELEFONO
+        let rememberBox = document.getElementById("auth-remember");
+        if (rememberBox && rememberBox.checked) {
+          localStorage.setItem("catanopoli_ricordami", JSON.stringify({ user: user, pass: pass }));
+        } else if (!forzaUser) {
+          localStorage.removeItem("catanopoli_ricordami"); // Cancella se fai login senza spunta
+        }
         
         utenteLoggato = user;
         document.getElementById("auth-menu").style.display = "none";
@@ -1210,6 +1242,23 @@
         }
       };
 
+      // AUTO-LOGIN INVISIBILE E ISTANTANEO ALL'AVVIO
+      setTimeout(function() {
+        let ricordati = localStorage.getItem("catanopoli_ricordami");
+        if (ricordati) {
+          try {
+            let dati = JSON.parse(ricordati);
+            if (dati && dati.user && dati.pass) {
+              document.getElementById("auth-username").value = dati.user;
+              document.getElementById("auth-password").value = dati.pass;
+              let rememberBox = document.getElementById("auth-remember");
+              if(rememberBox) rememberBox.checked = true;
+              eseguiLogin(dati.user, dati.pass); // Entra direttamente senza click!
+            }
+          } catch(e){}
+        }
+      }, 100);
+
       window.entraComeOspite = function() {
         utenteLoggato = null;
         document.getElementById("auth-menu").style.display = "none";
@@ -1227,6 +1276,12 @@
         document.getElementById("setup-name").value = "";
         document.getElementById("auth-username").value = "";
         document.getElementById("auth-password").value = "";
+        
+        // 🚪 Quando si disconnette volontariamente, il Ricordami viene distrutto!
+        localStorage.removeItem("catanopoli_ricordami"); 
+        let rememberBox = document.getElementById("auth-remember");
+        if(rememberBox) rememberBox.checked = false;
+
         document.getElementById("main-menu").style.display = "none";
         document.getElementById("user-logged-info").style.display = "none";
         document.getElementById("auth-menu").style.display = "flex";
