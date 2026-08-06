@@ -736,6 +736,16 @@
       >
         MULTIPLAYER ONLINE
       </button>
+      <button 
+        class="btn" 
+        style="max-width: 300px; margin-top: 15px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" 
+        onclick="showSetup('afk')"
+      >
+        ☕ SALA AFK (VIP LOUNGE)
+      </button>
+
+      <!-- INGRANAGGIO MENU PRINCIPALE -->
+      <button onclick="apriImpostazioni()" style="position:absolute; top:15px; right:15px; background:rgba(0,0,0,0.6); border:2px solid var(--border-color); color:white; border-radius:50%; width:45px; height:45px; font-size:1.5rem; cursor:pointer; display:flex; justify-content:center; align-items:center; z-index: 101; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">⚙️</button>
 
       <!-- SEZIONE SOCIAL E AGENZIA (MENU) -->
       <div style="margin-top: 25px; text-align: center; font-size: 0.8rem; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); width: 100%; max-width: 320px;">
@@ -961,6 +971,43 @@
       <div class="modal-content" id="modal-content"></div>
     </div>
 
+    <!-- MENU SALA AFK DIRETTA DAL MENU PRINCIPALE -->
+    <div id="afk-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 15px; font-size: 2rem;">☕ VIP Lounge</h2>
+      <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 20px; text-align: center; max-width: 300px;">Entra nella Sala AFK per la videochat di gruppo, senza tabellone!</p>
+      
+      <div class="input-group">
+        <label>NOME DELLA STANZA:</label>
+        <input type="text" id="afk-direct-room-name" value="Lounge" />
+      </div>
+      <div class="input-group">
+        <label>PASSWORD (FACOLTATIVA):</label>
+        <input type="password" id="afk-direct-room-pass" placeholder="Lascia vuoto se libera" />
+      </div>
+      
+      <button class="btn" style="max-width: 300px; margin-top: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="confermaEntraAFK()">
+        ENTRA NELLA LOUNGE
+      </button>
+      <button class="btn secondary" style="max-width: 300px; margin-top: 10px" onclick="goBackMenu()">
+        INDIETRO
+      </button>
+    </div>
+
+    <!-- PANNELLO IMPOSTAZIONI AUDIO UNIVERSALE -->
+    <div id="settings-modal" class="modal-overlay" style="z-index: 9999;">
+      <div class="modal-content" style="max-width: 350px;">
+        <h3 style="color: white; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">⚙️ IMPOSTAZIONI</h3>
+        <div style="margin-top: 20px; text-align: left;">
+          <label style="font-weight: bold; color: var(--border-color); display:block; margin-bottom:8px;">🎵 Volume Musica:</label>
+          <input type="range" id="setting-music-vol" min="0" max="1" step="0.01" value="0.15" oninput="aggiornaVolumi()" style="width: 100%; margin-bottom: 20px; cursor: pointer;">
+          
+          <label style="font-weight: bold; color: var(--border-color); display:block; margin-bottom:8px;">🔊 Volume Effetti & Voce:</label>
+          <input type="range" id="setting-sfx-vol" min="0" max="1" step="0.01" value="1.0" oninput="aggiornaVolumi()" style="width: 100%; margin-bottom: 25px; cursor: pointer;">
+        </div>
+        <button class="btn" style="width: 100%;" onclick="chiudiImpostazioni()">SALVA E CHIUDI</button>
+      </div>
+    </div>
+
     <!-- SALA AFK UI DINAMICA -->
     <div id="afk-ui" class="menu-screen" style="display: none; justify-content: flex-start; padding-top: 20px;">
       <h2 style="color: var(--border-color); margin-bottom: 5px; font-size: 1.8rem;">SALA AFK ☕</h2>
@@ -996,11 +1043,8 @@
       </div>
       
       <button class="btn-exit" onclick="quitGame()">✖</button>
-      <!-- Controlli Musica e Volume -->
-      <div style="position: absolute; top: 10px; right: 55px; z-index: 60; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border-color);">
-        <button id="btn-toggle-music" onclick="toggleMusic()" style="background: #c99c51; color: #141b29; border: 2px solid white; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; padding: 0;">🎵</button>
-        <input type="range" id="music-volume" min="0" max="1" step="0.01" value="0.15" oninput="changeVolume(this.value)" style="width: 70px; cursor: pointer;">
-      </div>
+      <!-- Pulsante Impostazioni in Partita -->
+      <button onclick="apriImpostazioni()" style="position: absolute; top: 10px; right: 55px; z-index: 60; background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 38px; height: 38px; font-size: 1.2rem; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.8);">⚙️</button>
       
       <div id="game-wrapper">
         <div class="board" id="game-board"></div>
@@ -1085,99 +1129,92 @@
       let currentTimerSec = 0; // Ricorda i secondi rimasti
       let currentTimerCallback = null; // Ricorda l'azione da fare
 
+      // ---- IMPOSTAZIONI GLOBALI AUDIO ----
+      let volumeMusicaGlobale = 0.15;
+      let volumeEffettiGlobale = 1.0;
+
+      window.apriImpostazioni = function() {
+        document.getElementById("settings-modal").style.display = "flex";
+      };
+      
+      window.chiudiImpostazioni = function() {
+        document.getElementById("settings-modal").style.display = "none";
+      };
+      
+      window.aggiornaVolumi = function() {
+        volumeMusicaGlobale = parseFloat(document.getElementById("setting-music-vol").value);
+        volumeEffettiGlobale = parseFloat(document.getElementById("setting-sfx-vol").value);
+        
+        let bgMusicEl = document.getElementById("bg-music");
+        if(bgMusicEl) {
+            bgMusicEl.volume = volumeMusicaGlobale;
+            if (volumeMusicaGlobale > 0 && bgMusicEl.paused) {
+                playRandomBgMusic(); // Se alzi il volume da 0, fa ripartire la musica in automatico!
+            } else if (volumeMusicaGlobale === 0) {
+                bgMusicEl.pause();
+            }
+        }
+      };
+
       // ---- INIZIO LOGICA MUSICA ----
       const bgTracks = ["musica1.mp3", "musica2.mp3", "musica3.mp3", "musica4.mp3", "musica5.mp3", "musica6.mp3"];
       let currentTrackIndex = -1;
-      let isMusicMuted = false;
 
       function playRandomBgMusic() {
-        if (isMusicMuted) return;
+        if (volumeMusicaGlobale <= 0) return; // Non fa partire la musica se è stata messa a zero
         let bgMusicEl = document.getElementById("bg-music");
         let nextIndex;
-        // Sceglie una traccia a caso, assicurandosi che non sia la stessa di prima
         do {
           nextIndex = Math.floor(Math.random() * bgTracks.length);
         } while (nextIndex === currentTrackIndex && bgTracks.length > 1);
         
         currentTrackIndex = nextIndex;
         bgMusicEl.src = bgTracks[currentTrackIndex];
-        bgMusicEl.volume = document.getElementById("music-volume").value; // Prende il volume dalla levetta
-        bgMusicEl.play().catch(e => console.log("Autoplay bloccato", e));
-      }
-
-      function toggleMusic() {
-        let bgMusicEl = document.getElementById("bg-music");
-        let btnMusic = document.getElementById("btn-toggle-music");
-        isMusicMuted = !isMusicMuted;
-        
-        if (isMusicMuted) {
-          bgMusicEl.pause();
-          btnMusic.style.filter = "grayscale(100%)";
-          btnMusic.style.opacity = "0.5";
-        } else {
-          btnMusic.style.filter = "none";
-          btnMusic.style.opacity = "1";
-          if (!bgMusicEl.src || bgMusicEl.src.includes("null")) {
-             playRandomBgMusic();
-          } else {
-             bgMusicEl.play();
-          }
+        bgMusicEl.volume = volumeMusicaGlobale; 
+        let playPromise = bgMusicEl.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(e => console.log("Autoplay bloccato", e));
         }
       }
 
-      // Appena una canzone finisce, ne fa partire un'altra!
       document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("bg-music").addEventListener("ended", playRandomBgMusic);
       });
-      // ---- FINE LOGICA MUSICA ----
-
-      window.changeVolume = function(val) {
-        let bgMusicEl = document.getElementById("bg-music");
-        if(bgMusicEl) bgMusicEl.volume = val;
-      };
 
       // ---- MOTORE VOCALE (Il nostro "Piper Premium") ----
       let speechUnlocked = false;
 
-      // Trucco Ninja: Sblocco forzato al primissimo tocco sullo schermo (Vitale per i Cellulari!)
       function sbloccaVoce() {
         if (!speechUnlocked && 'speechSynthesis' in window) {
-          let sblocco = new SpeechSynthesisUtterance(''); // Frase invisibile
+          let sblocco = new SpeechSynthesisUtterance(''); 
           window.speechSynthesis.speak(sblocco);
           speechUnlocked = true;
         }
       }
-      // Ascolta il primo click o tocco ovunque nello schermo per togliere il "guinzaglio" ad Android/iOS
       document.addEventListener('click', sbloccaVoce, { once: true });
       document.addEventListener('touchstart', sbloccaVoce, { once: true });
 
-      // Forza il caricamento delle voci all'avvio
       if ('speechSynthesis' in window) {
         window.speechSynthesis.onvoiceschanged = function() {
           window.speechSynthesis.getVoices();
         };
       }
 
-      // Variabile globale per impedire ad Android/Chrome di "uccidere" la voce a metà frase
       window.voceInEsecuzione = null; 
 
       function leggiTesto(testo) {
-        if ('speechSynthesis' in window) {
+        if ('speechSynthesis' in window && volumeEffettiGlobale > 0) {
           window.speechSynthesis.cancel(); 
           window.speechSynthesis.resume(); 
 
-          // 1. Pulisce il testo: trasforma "€" in " euro " e toglie le emoji per non far impazzire il motore
           let testoPulito = testo.replace(/€/g, " euro ");
-          try {
-            // Rimuove eventuali emoji nascoste
-            testoPulito = testoPulito.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "");
-          } catch(e) {} 
+          try { testoPulito = testoPulito.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, ""); } catch(e) {} 
 
-          // 2. Usiamo la variabile globale invece di 'let'
           window.voceInEsecuzione = new SpeechSynthesisUtterance(testoPulito);
           window.voceInEsecuzione.lang = 'it-IT';
           window.voceInEsecuzione.rate = 1.0; 
           window.voceInEsecuzione.pitch = 1.0; 
+          window.voceInEsecuzione.volume = volumeEffettiGlobale; // 🔊 Regola il volume della voce!
 
           let voices = window.speechSynthesis.getVoices();
           let googleVoice = voices.find(function(v) { return v.lang.includes('it') && v.name.includes('Google'); });
@@ -1195,11 +1232,9 @@
 
       // ---- MOTORE EFFETTI SONORI (SFX) ----
       window.suonaEffetto = function(nomeFile) {
-        // Prende il volume della musica e lo alza un pelino per far spiccare l'effetto sonoro
-        let vol = parseFloat(document.getElementById("music-volume").value) + 0.3; 
-        if(vol > 1) vol = 1;
+        if (volumeEffettiGlobale <= 0) return; // Blocca i suoni se il volume effetti è a zero
         let sfx = new Audio(nomeFile + '.mp3');
-        sfx.volume = vol;
+        sfx.volume = volumeEffettiGlobale;
         sfx.play().catch(e => console.log("SFX bloccato dai permessi browser", e));
       };
 
@@ -1789,6 +1824,8 @@
         document.getElementById("main-menu").style.display = "none";
         if (mode === "single") {
           document.getElementById("bot-setup-menu").style.display = "flex";
+        } else if (mode === "afk") {
+          document.getElementById("afk-setup-menu").style.display = "flex";
         } else {
           document.getElementById("multi-setup-menu").style.display = "flex";
           mostraCreaStanza();
@@ -1797,10 +1834,32 @@
 
       function goBackMenu() {
         document.getElementById("bot-setup-menu").style.display = "none";
-        if (document.getElementById("multi-setup-menu"))
-          document.getElementById("multi-setup-menu").style.display = "none";
+        if (document.getElementById("multi-setup-menu")) document.getElementById("multi-setup-menu").style.display = "none";
+        if (document.getElementById("afk-setup-menu")) document.getElementById("afk-setup-menu").style.display = "none";
         document.getElementById("main-menu").style.display = "flex";
       }
+
+      // Funzione per entrare DIRETTAMENTE nella VIP Lounge dal Menu Principale
+      window.confermaEntraAFK = function() {
+        if (typeof io === "undefined") { alert("Errore connessione server."); return; }
+        if (!socket) socket = io();
+        
+        let nomeStanza = document.getElementById("afk-direct-room-name").value.trim();
+        let passStanza = document.getElementById("afk-direct-room-pass").value;
+        
+        if (!nomeStanza) { alert("Inserisci un nome per la stanza!"); return; }
+        
+        myRoom = "[AFK] " + nomeStanza; 
+        gameMode = "multi";
+        
+        let rawName = document.getElementById("setup-name").value || "Lucio";
+        const pToken = document.getElementById("setup-token").value;
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
+        
+        socket.emit("joinSpecificRoom", { roomName: myRoom, roomPass: passStanza, name: pName, startMoney: 0 });
+        document.getElementById("afk-setup-menu").style.display = "none";
+        inizializzaEventiMultiplayer();
+      };
 
       function mostraCreaStanza() {
         document.getElementById("box-crea-stanza").style.display = "block";
