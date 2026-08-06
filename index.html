@@ -3766,20 +3766,19 @@
       let myPeer = null;
       let myAudioStream = null;
 
-      // 🔥 CONFIGURAZIONE ANTI-BLOCCO ESTREMA PER RETI MOBILI E XIAOMI (CGNAT + IPv6)
+      // 🔥 CONFIGURAZIONE ANTI-BLOCCO DEFINITIVA (Con IPv6 per reti mobili Italiane)
       const peerConfig = {
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' },
-            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            { urls: 'stun:stun.ipv6.l.google.com:19302' }, // 🔥 FONDAMENTALE PER 4G/5G (Iliad, Vodafone, ecc.)
+            { urls: 'stun:global.stun.twilio.com:3478?transport=tcp' }, // Forza TCP su Twilio
+            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443?transport=udp', username: 'openrelayproject', credential: 'openrelayproject' }
           ],
           sdpSemantics: 'unified-plan',
           iceTransportPolicy: 'all',
-          iceCandidatePoolSize: 10 // 🔥 Trucco magico: prepara le porte 4G prima ancora di chiamare!
+          iceCandidatePoolSize: 10
         }
       };
 
@@ -3815,8 +3814,18 @@
         }
         if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
 
+        // 🔥 TRUCCO WHATSAPP/TELEGRAM: Abbassiamo la risoluzione video!
+        // Se il pacchetto è troppo "pesante" in 4G, il gestore lo taglia e la chiamata fallisce.
         let mediaConstraints = conVideo 
-          ? { video: { facingMode: "user" }, audio: true } // Lasciamo decidere la risoluzione al telefono per non mandarlo in panico
+          ? { 
+              video: { 
+                facingMode: "user",
+                width: { ideal: 480 },
+                height: { ideal: 360 },
+                frameRate: { ideal: 20, max: 24 }
+              }, 
+              audio: true 
+            } 
           : { audio: true, video: false };
 
         navigator.mediaDevices.getUserMedia(mediaConstraints)
