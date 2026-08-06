@@ -3890,22 +3890,10 @@
               document.getElementById("afk-video-grid").appendChild(wrapper);
               
           } else {
-              media.controls = true;
-              media.style.width = "100%";
-              media.style.height = "30px";
-              media.style.marginTop = "5px";
-
-              let container = document.getElementById("audio-container");
-              container.style.display = "block";
-              container.style.position = "absolute";
-              container.style.top = "10px";
-              container.style.left = "10px";
-              container.style.zIndex = "999";
-              container.style.background = "rgba(0,0,0,0.8)";
-              container.style.padding = "5px";
-              container.style.borderRadius = "8px";
-
-              container.appendChild(media);
+              // 🔥 FIX GRAFICO: L'audio in partita resta invisibile e non copre più i tuoi pulsanti!
+              media.controls = false;
+              media.style.display = "none";
+              document.getElementById("audio-container").appendChild(media);
           }
 
           if (callObj) {
