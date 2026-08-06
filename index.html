@@ -3811,7 +3811,6 @@
       };
 
       window.accendiMedia = function(conVideo = false) {
-        // 🔥 UCCIDE I TUOI FANTASMI CHIUDENDO LE TUE CONNESSIONI VECCHIE
         if (myPeer) { 
           for (let conns in myPeer.connections) {
             myPeer.connections[conns].forEach(c => c.close());
@@ -3821,10 +3820,16 @@
         }
         if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
 
-        // 🔥 PARAMETRI SICURI: Risoluzione stabile per non far crashare lo Xiaomi
+        // 🔥 FIX CODEC XIAOMI: Togliamo la risoluzione rigida e chiediamo il formato standard universale!
         let mediaConstraints = conVideo 
-          ? { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: true } 
-          : { audio: true };
+          ? { 
+              video: { 
+                facingMode: "user",
+                frameRate: { ideal: 24, max: 30 } 
+              }, 
+              audio: true 
+            } 
+          : { audio: true, video: false };
 
         navigator.mediaDevices.getUserMedia(mediaConstraints)
           .then(function (stream) {
@@ -3846,14 +3851,17 @@
             if (document.getElementById("my-video-wrapper")) {
                 if(conVideo) {
                     document.getElementById("my-video-wrapper").style.display = "flex";
-                    document.getElementById("my-local-video").srcObject = stream;
+                    let myLocalVid = document.getElementById("my-local-video");
+                    myLocalVid.srcObject = stream;
+                    // 🔥 Assicuriamoci che anche il TUO video parta correttamente senza blocchi
+                    myLocalVid.setAttribute('autoplay', '');
+                    myLocalVid.setAttribute('playsinline', '');
                 } else {
                     document.getElementById("my-video-wrapper").style.display = "none";
                 }
             }
 
-            // 🔥 Applica il Server TURN Anti-blocco anche in trasmissione
-            myPeer = new Peer({ config: peerConfig.config }); 
+            myPeer = new Peer(peerConfig); 
             
             myPeer.on("call", function (call) {
               call.answer(myAudioStream);
@@ -3869,13 +3877,12 @@
             });
           })
           .catch(function (err) {
-            alert("⚠️ ERRORE HARDWARE / PERMESSI:\n\n" + err.name + ": " + err.message + "\n\nAssicurati di non avere la fotocamera aperta in un'altra app e apri il link direttamente su Chrome o Safari!");
+            alert("⚠️ ERRORE HARDWARE / PERMESSI:\n\n" + err.name + ": " + err.message + "\n\nAssicurati di aver dato il permesso fotocamera/microfono e usa Chrome!");
           });
       };
 
       window.accendiMicrofono = function() { accendiMedia(false); };
 
-      // FUNZIONE SPAZZINO DEFINITIVA
       function distruggiVideo(peerId) {
         let el1 = document.getElementById("wrapper-" + peerId);
         let el2 = document.getElementById("media-" + peerId);
@@ -3891,6 +3898,12 @@
           media.autoplay = true;
           media.playsInline = true;
           
+          // 🔥 FIX COMPATIBILITÀ IPHONE E ALTRI ANDROID: Devono avere queste etichette o mostrano schermo nero!
+          media.setAttribute('autoplay', '');
+          media.setAttribute('playsinline', '');
+          
+          stream.oninactive = function() { distruggiVideo(peerId); };
+
           if (myRoom.includes("[AFK]")) {
               media.style.width = "100%";
               media.style.height = "100%";
@@ -3924,7 +3937,6 @@
               document.getElementById("afk-video-grid").appendChild(wrapper);
               
           } else {
-              // 🔥 FIX GRAFICO: L'audio in partita resta invisibile e non copre più i tuoi pulsanti!
               media.controls = false;
               media.style.display = "none";
               document.getElementById("audio-container").appendChild(media);
