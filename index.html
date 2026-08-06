@@ -819,25 +819,19 @@
       <div id="box-crea-stanza" style="width: 100%; max-width: 300px">
         <div class="input-group">
           <label>NOME DELLA TUA STANZA:</label>
-          <input
-            type="text"
-            id="create-room-name"
-            value="Inserisci Nome Stanza"
-          />
+          <input type="text" id="create-room-name" value="Inserisci Nome Stanza" />
         </div>
         <div class="input-group">
           <label>PASSWORD (FACOLTATIVA):</label>
-          <input
-            type="password"
-            id="create-room-pass"
-            placeholder="Lascia vuoto se libera"
-          />
+          <input type="password" id="create-room-pass" placeholder="Lascia vuoto se libera" />
         </div>
-        <button
-          class="btn"
-          style="margin-top: 10px"
-          onclick="confermaCreaStanza()"
-        >
+        <div class="input-group" style="margin-top: 10px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: white; margin: 0; font-size: 0.8rem;">
+            <input type="checkbox" id="is-afk-room" style="width: 20px; height: 20px; accent-color: #c99c51;">
+            <b>Crea come SALA AFK (Video e Voce, Niente Tabellone)</b>
+          </label>
+        </div>
+        <button class="btn" style="margin-top: 10px" onclick="confermaCreaStanza()">
           CREA E APRI LOBBY
         </button>
       </div>
@@ -966,6 +960,28 @@
     <div id="modal-overlay" class="modal-overlay">
       <div class="modal-content" id="modal-content"></div>
     </div>
+
+    <!-- SALA AFK UI -->
+    <div id="afk-ui" class="menu-screen" style="display: none; justify-content: flex-start; padding-top: 50px;">
+      <h2 style="color: var(--border-color); margin-bottom: 5px; font-size: 2rem;">SALA AFK ☕</h2>
+      <p style="color: #aaa; margin-bottom: 20px; font-size: 0.9rem; text-align:center;">Chiacchiera in diretta con la tua stanza.</p>
+      
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; max-width: 400px; margin-bottom: 20px;">
+        <button class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.75rem;" onclick="accendiMedia(false)">🎙️ SOLO AUDIO</button>
+        <button class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.75rem;" onclick="accendiMedia(true)">📹 ATTIVA VIDEO</button>
+        <button class="btn secondary" style="width: 100%; color: #bd2a2a; border-color: #bd2a2a; font-size: 0.8rem;" onclick="quitGame()">❌ ESCI DALLA STANZA</button>
+      </div>
+
+      <!-- GRIGLIA VIDEO -->
+      <div id="afk-video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; width: 100%; max-width: 800px; overflow-y: auto; padding: 10px; align-items:start;">
+        <!-- Il tuo video locale (Invisibile finché non premi il tasto video) -->
+        <div style="position: relative; border-radius: 12px; overflow: hidden; background: #000; border: 2px solid var(--border-color); aspect-ratio: 3/4; display: none;" id="my-video-wrapper">
+          <video id="my-local-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+          <div style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">Tu</div>
+        </div>
+      </div>
+    </div>
+
 
     <div id="game-ui">
       <!-- Player invisibile per la musica -->
@@ -1844,6 +1860,10 @@
         myRoom = document.getElementById("create-room-name").value.trim();
         let roomPass = document.getElementById("create-room-pass").value;
         
+        // CONTROLLO SALA AFK
+        let isAfk = document.getElementById("is-afk-room") && document.getElementById("is-afk-room").checked;
+        if (isAfk) myRoom = "[AFK] " + myRoom;
+        
         let rawName = document.getElementById("setup-name").value || "Lucio";
         const pToken = document.getElementById("setup-token").value;
         const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName); // Niente emoji se c'è foto!
@@ -1967,13 +1987,20 @@
           }
         });
 
-        // INIZIO PARTITA! (Ricevuto da tutti)
+        // INIZIO PARTITA O SALA AFK!
         socket.on("gameStarted", function (roomData) {
           document.getElementById("waiting-room-menu").style.display = "none";
-          document.getElementById("game-ui").style.display = "flex";
-          renderBoard();
-          applicaStatoGioco(roomData);
-          if (!myPeer) accendiMicrofono(); // Accende il mic a partita iniziata
+          
+          if (myRoom.includes("[AFK]")) {
+            // MODALITA' SALA AFK (Niente tabellone)
+            document.getElementById("afk-ui").style.display = "flex";
+          } else {
+            // GIOCO NORMALE
+            document.getElementById("game-ui").style.display = "flex";
+            renderBoard();
+            applicaStatoGioco(roomData);
+            if (!myPeer) accendiMicrofono(); // Accende il mic a partita iniziata
+          }
         });
 
         socket.on("updateState", function (serverData) {
@@ -2294,74 +2321,122 @@
         humanAction(azione);
       }
 
+      // ---- INTELLIGENZA ARTIFICIALE BOT: COSTRUZIONI & SCAMBI ----
+      function botGestisciCostruzioni(bot) {
+        if (!bot.isBot || bot.bankrupt || bot.inJail) return;
+
+        Object.keys(properties).forEach(function(pos) {
+          let prop = properties[pos];
+          if (String(prop.owner) === String(bot.id) && prop.group !== "stazione" && prop.group !== "societa") {
+            if (hasMonopoly(bot.id, prop.group) && prop.houses < 5) {
+              if (bot.money >= prop.houseCost + 150) {
+                bot.money -= prop.houseCost;
+                prop.houses++;
+                updateHousesDisplay(pos);
+                suonaEffetto('cassa');
+                document.getElementById("game-log").innerHTML = "🔨 <b>" + bot.name + "</b> costruisce su <b>" + prop.name + "</b>!";
+              }
+            }
+          }
+        });
+        updateTokens();
+      }
+
+      function botProponiScambioIA(bot) {
+        if (!bot.isBot || bot.bankrupt || bot.inJail) return false;
+
+        let gruppi = ["marrone", "celeste", "viola", "arancio", "rosso", "giallo", "verde", "blu"];
+        
+        for (let g of gruppi) {
+          let carteGruppo = Object.entries(properties).filter(e => e[1].group === g);
+          let mieCarte = carteGruppo.filter(e => String(e[1].owner) === String(bot.id));
+          
+          if (mieCarte.length === carteGruppo.length - 1) {
+            let mancaEntry = carteGruppo.find(e => String(e[1].owner) !== String(bot.id));
+            let posMancante = mancaEntry[0];
+            let propMancante = mancaEntry[1];
+
+            if (propMancante.owner !== null && String(propMancante.owner) !== String(bot.id)) {
+              let padrone = players.find(p => String(p.id) === String(propMancante.owner) && !p.bankrupt);
+              if (padrone) {
+                let offertaPrezzo = propMancante.price * 2;
+
+                if (bot.money >= offertaPrezzo + 150) {
+                  let offerta = {
+                    mySelected: [],
+                    hisSelected: [posMancante],
+                    offerMoney: offertaPrezzo,
+                    requestMoney: 0,
+                    fromId: bot.id,
+                    fromName: bot.name
+                  };
+
+                  if (!padrone.isBot) {
+                    mostraPopupRicezioneScambio({ offerta: offerta, targetId: padrone.id });
+                    return true; 
+                  } else {
+                    // Scambio automatico tra Bot!
+                    bot.money -= offertaPrezzo;
+                    padrone.money += offertaPrezzo;
+                    propMancante.owner = bot.id;
+                    updateTokens();
+                    document.getElementById("game-log").innerHTML = "🤝 <b>" + bot.name + "</b> ha comprato " + propMancante.name + " da <b>" + padrone.name + "</b> per " + offertaPrezzo + "€!";
+                    return false;
+                  }
+                }
+              }
+            }
+          }
+        }
+        return false;
+      }
+
       function startTurnFlow() {
         bloccaTimer();
 
-        // 1. CONTROLLO VITTORIA ASSOLUTO: Controlla sempre quanti giocatori sono rimasti!
         let activePlayers = players.filter(function (pl) {
           return !pl.bankrupt;
         });
 
         if (activePlayers.length === 1) {
           let winner = activePlayers[0].name;
-          document.getElementById("game-log").innerHTML =
-            "🏆 <b>" + winner + " HA VINTO LA PARTITA!</b> 🏆";
-            
-          mostraVideoCentro('vittoria'); // 🎬 VIDEO VITTORIA
-          
-          setRightAction(
-            "<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU E RIGIOCA</button>"
-          );
-          return; // Blocca tutto, la partita è finita!
+          document.getElementById("game-log").innerHTML = "🏆 <b>" + winner + " HA VINTO LA PARTITA!</b> 🏆";
+          mostraVideoCentro('vittoria');
+          setRightAction("<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU E RIGIOCA</button>");
+          return;
         } else if (activePlayers.length === 0) {
-          document.getElementById("game-log").innerHTML =
-            "☠️ <b>TUTTI IN BANCAROTTA! NESSUN VINCITORE!</b>";
-          setRightAction(
-            "<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU</button>"
-          );
+          document.getElementById("game-log").innerHTML = "☠️ <b>TUTTI IN BANCAROTTA! NESSUN VINCITORE!</b>";
+          setRightAction("<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU</button>");
           return;
         }
 
         let p = getP();
 
-        // 2. SE IL GIOCATORE DI TURNO È FALLITO, SALTA IL SUO TURNO
         if (p.bankrupt) {
           currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
           setTimeout(startTurnFlow, 100);
           return;
         }
 
-        // SE E' IL TURNO DELL'AVVERSARIO IN MULTIPLAYER (PROTEZIONE)
         if (gameMode === "multi" && p.id !== socket.id) {
-          setRightAction(
-            "<button class='btn secondary' disabled>Turno di " +
-              p.name +
-              " (" +
-              (hasRolledDouble ? "DOPPIO" : "ATTESA") +
-              ")...</button>"
-          );
-          document.getElementById("game-log").innerHTML =
-            "È il turno di <b style='color:" + p.color + "'>" + p.name + "</b>";
+          setRightAction("<button class='btn secondary' disabled>Turno di " + p.name + " (" + (hasRolledDouble ? "DOPPIO" : "ATTESA") + ")...</button>");
+          document.getElementById("game-log").innerHTML = "È il turno di <b style='color:" + p.color + "'>" + p.name + "</b>";
           return;
         }
 
-        // SE E' IL MIO TURNO (O DEL MIO BOT IN SINGLEPLAYER)
         if (p.isBot) {
-          setRightAction(
-            "<button class='btn secondary' disabled>Turno di " +
-              p.name +
-              " (" +
-              (hasRolledDouble ? "DOPPIO" : "ATTESA") +
-              ")...</button>"
-          );
-          document.getElementById("game-log").innerHTML =
-            "È il turno di <b style='color:" + p.color + "'>" + p.name + "</b>";
-          setTimeout(lancioDadiProtetto, 1500);
+          // 🔥 L'IA DEL BOT ENTRA IN AZIONE ALL'INIZIO DEL TURNO!
+          botGestisciCostruzioni(p);
+          let haPropostoScambio = botProponiScambioIA(p);
+
+          setRightAction("<button class='btn secondary' disabled>Turno di " + p.name + " (" + (hasRolledDouble ? "DOPPIO" : "ATTESA") + ")...</button>");
+          
+          if (!haPropostoScambio) {
+            setTimeout(lancioDadiProtetto, 1500);
+          }
         } else {
-          document.getElementById("game-log").innerHTML =
-            "È il tuo turno, <b>" + p.name + "</b>!";
+          document.getElementById("game-log").innerHTML = "È il tuo turno, <b>" + p.name + "</b>!";
             
-          // 25% di probabilità che Piper spari una frase catanese a tradimento!
           if (Math.random() < 0.25) {
             let fraseCaso = frasiCatanesi[Math.floor(Math.random() * frasiCatanesi.length)];
             leggiTesto(fraseCaso);
@@ -2969,11 +3044,10 @@
         return (
           g.length > 0 &&
           g.every(function (p) {
-            return p.owner === owner;
+            return String(p.owner) === String(owner);
           })
         );
       }
-
       function calculateRent(pos) {
         let prop = properties[pos];
         let owner = prop.owner;
@@ -3389,27 +3463,27 @@
       let myPeer = null;
       let myAudioStream = null;
 
-      function accendiMicrofono() {
+      window.accendiMedia = function(conVideo = false) {
         let btnMic = document.getElementById("btn-voice");
 
-        // SE E' GIA' CONNESSO, FUNZIONA DA INTERRUTTORE ON/OFF (MUTO)
         if (myPeer && myAudioStream) {
           let audioTrack = myAudioStream.getAudioTracks()[0];
-          audioTrack.enabled = !audioTrack.enabled; // Inverte lo stato (Muto/Smuto)
+          if(audioTrack) audioTrack.enabled = !audioTrack.enabled;
           
-          if (audioTrack.enabled) {
-            btnMic.style.background = "#3b7a3b";
-            btnMic.style.borderColor = "#2a5a2a";
-            btnMic.innerHTML = "🎤 AUDIO ON";
-          } else {
-            btnMic.style.background = "#bd2a2a";
-            btnMic.style.borderColor = "#7a1515";
-            btnMic.innerHTML = "🔇 MUTO";
+          if(btnMic) {
+              if (audioTrack && audioTrack.enabled) {
+                btnMic.style.background = "#3b7a3b";
+                btnMic.style.borderColor = "#2a5a2a";
+                btnMic.innerHTML = "🎤 AUDIO ON";
+              } else {
+                btnMic.style.background = "#bd2a2a";
+                btnMic.style.borderColor = "#7a1515";
+                btnMic.innerHTML = "🔇 MUTO";
+              }
           }
           return;
         }
         
-        // PRIMA CONNESSIONE
         myPeer = new Peer({
           config: {
             iceServers: [
@@ -3421,10 +3495,10 @@
         });
 
         navigator.mediaDevices
-          .getUserMedia({ video: false, audio: true })
+          .getUserMedia({ video: conVideo, audio: true })
           .then(function (stream) {
             myAudioStream = stream;
-            document.getElementById("game-log").innerHTML = "🎤 Microfono collegato!";
+            document.getElementById("game-log").innerHTML = conVideo ? "📹 Video e Audio collegati!" : "🎤 Microfono collegato!";
 
             if (btnMic) {
               btnMic.style.background = "#3b7a3b";
@@ -3432,10 +3506,16 @@
               btnMic.innerHTML = "🎤 AUDIO ON";
             }
 
+            // Se siamo nella Sala AFK e abbiamo il video acceso, mostra la nostra telecamera locale!
+            if (conVideo && document.getElementById("my-video-wrapper")) {
+                document.getElementById("my-video-wrapper").style.display = "block";
+                document.getElementById("my-local-video").srcObject = stream;
+            }
+
             myPeer.on("call", function (call) {
               call.answer(myAudioStream);
               call.on("stream", function (userAudioStream) {
-                aggiungiAudioPlayer(call.peer, userAudioStream);
+                aggiungiMediaPlayer(call.peer, userAudioStream);
               });
             });
 
@@ -3444,45 +3524,79 @@
             });
           })
           .catch(function (err) {
-            alert("Devi dare il permesso al microfono se vuoi parlare in partita!");
-            myPeer = null; // Resetta per permettere di riprovare
+            alert("⚠️ ERRORE PERMESSI!\n\n1. Controlla di aver dato il permesso a Microfono/Fotocamera.\n2. Se sei su TikTok/Instagram, premi i 3 puntini in alto a destra e scegli 'APRI IN CHROME' o 'SAFARI'!");
+            myPeer = null; 
           });
-      }
+      };
 
-      function aggiungiAudioPlayer(peerId, stream) {
-        if (!document.getElementById("audio-" + peerId)) {
-          const audio = document.createElement("audio");
-          audio.id = "audio-" + peerId;
-          audio.srcObject = stream;
-          audio.autoplay = true;
-          audio.playsInline = true; 
-          audio.controls = true;
-          audio.style.width = "100%";
-          audio.style.height = "30px";
-          audio.style.marginTop = "5px";
+      // Mantiene compatibile il vecchio tasto del tabellone per attivare solo l'audio
+      window.accendiMicrofono = function() {
+          accendiMedia(false);
+      };
 
-          let container = document.getElementById("audio-container");
-          container.style.display = "block";
-          container.style.position = "absolute";
-          container.style.top = "10px";
-          container.style.left = "10px";
-          container.style.zIndex = "999";
-          container.style.background = "rgba(0,0,0,0.8)";
-          container.style.padding = "5px";
-          container.style.borderRadius = "8px";
+      function aggiungiMediaPlayer(peerId, stream) {
+        if (!document.getElementById("media-" + peerId)) {
+          const media = document.createElement("video"); // Il video tag riproduce sia audio che video!
+          media.id = "media-" + peerId;
+          media.srcObject = stream;
+          media.autoplay = true;
+          media.playsInline = true;
+          
+          if (myRoom.includes("[AFK]")) {
+              // GRIGLIA VIDEO (SALA AFK)
+              media.style.width = "100%";
+              media.style.height = "100%";
+              media.style.objectFit = "cover";
+              
+              let wrapper = document.createElement("div");
+              wrapper.style.position = "relative";
+              wrapper.style.borderRadius = "12px";
+              wrapper.style.overflow = "hidden";
+              wrapper.style.background = "#141b29";
+              wrapper.style.border = "2px solid var(--border-color)";
+              wrapper.style.aspectRatio = "3/4";
+              
+              let label = document.createElement("div");
+              label.style.position = "absolute";
+              label.style.bottom = "5px";
+              label.style.left = "5px";
+              label.style.background = "rgba(0,0,0,0.7)";
+              label.style.padding = "2px 6px";
+              label.style.borderRadius = "4px";
+              label.style.fontSize = "0.7rem";
+              label.style.fontWeight = "bold";
+              label.innerText = "Connesso"; 
 
-          container.appendChild(audio);
+              wrapper.appendChild(media);
+              wrapper.appendChild(label);
+              document.getElementById("afk-video-grid").appendChild(wrapper);
+              
+          } else {
+              // SOLO AUDIO IN PARTITA (Nascosto ma ascoltabile)
+              media.controls = true;
+              media.style.width = "100%";
+              media.style.height = "30px";
+              media.style.marginTop = "5px";
 
-          let playPromise = audio.play();
+              let container = document.getElementById("audio-container");
+              container.style.display = "block";
+              container.style.position = "absolute";
+              container.style.top = "10px";
+              container.style.left = "10px";
+              container.style.zIndex = "999";
+              container.style.background = "rgba(0,0,0,0.8)";
+              container.style.padding = "5px";
+              container.style.borderRadius = "8px";
+
+              container.appendChild(media);
+          }
+
+          let playPromise = media.play();
           if (playPromise !== undefined) {
             playPromise.catch(function (e) {
-              console.log(
-                "Audio bloccato dal browser. Sblocco automatico al primo click.",
-                e
-              );
-              // Sblocca al primo click sullo schermo
+              console.log("Auto-play bloccato dal browser. Sblocco automatico al click.");
               document.addEventListener("click", function sbloccaAudio() {
-                audio.play();
+                media.play();
                 document.removeEventListener("click", sbloccaAudio);
               });
             });
