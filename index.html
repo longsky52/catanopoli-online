@@ -1004,48 +1004,22 @@
 
     <!-- MENU SALA AFK DIRETTA DAL MENU PRINCIPALE -->
     <div id="afk-setup-menu" class="menu-screen" style="display: none">
-      <h2 style="color: var(--border-color); margin-bottom: 10px; font-size: 2rem;">☕ VIP Lounge</h2>
-      <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 15px; text-align: center; max-width: 300px;">Videochat di gruppo senza tabellone!</p>
+      <h2 style="color: var(--border-color); margin-bottom: 15px; font-size: 2rem;">☕ VIP Lounge</h2>
+      <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 20px; text-align: center; max-width: 300px;">Entra nella Sala AFK per la videochat di gruppo, senza tabellone!</p>
       
-      <div style="display: flex; gap: 10px; width: 100%; max-width: 320px; margin-bottom: 15px;">
-        <button class="btn" style="font-size: 0.8rem; padding: 8px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92; color: white;" onclick="mostraCreaAFK()">CREA LOUNGE</button>
-        <button class="btn secondary" style="font-size: 0.8rem; padding: 8px" onclick="mostraListaAFK()">UNISCITI</button>
+      <div class="input-group">
+        <label>NOME DELLA STANZA:</label>
+        <input type="text" id="afk-direct-room-name" value="Lounge" />
       </div>
-
-      <!-- SEZIONE CREA AFK -->
-      <div id="box-crea-afk" style="width: 100%; max-width: 300px">
-        <div class="input-group">
-          <label>NOME DELLA LOUNGE:</label>
-          <input type="text" id="afk-create-room-name" value="La mia Lounge" />
-        </div>
-        <div class="input-group">
-          <label>PASSWORD (FACOLTATIVA):</label>
-          <input type="password" id="afk-create-room-pass" placeholder="Lascia vuoto se libera" />
-        </div>
-        <button class="btn" style="margin-top: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="confermaCreaAFK()">
-          CREA E APRI LOUNGE
-        </button>
+      <div class="input-group">
+        <label>PASSWORD (FACOLTATIVA):</label>
+        <input type="password" id="afk-direct-room-pass" placeholder="Lascia vuoto se libera" />
       </div>
-
-      <!-- SEZIONE LISTA AFK -->
-      <div id="box-lista-afk" style="display: none; width: 100%; max-width: 300px">
-        <label style="display: block; font-size: 0.85rem; color: var(--border-color); margin-bottom: 6px; font-weight: bold; text-align: left;">LOUNGE DISPONIBILI:</label>
-        <div id="afk-rooms-container" style="max-height: 150px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; margin-bottom: 10px; text-align: left; font-size: 0.9rem;">
-          <i>Nessuna Lounge attiva...</i>
-        </div>
-        <div class="input-group" id="afk-join-pass-box" style="display: none">
-          <label>INSERISCI PASSWORD:</label>
-          <input type="password" id="afk-join-room-pass" />
-        </div>
-        <button class="btn" style="margin-top: 5px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="confermaEntraAFK()">
-          ENTRA NELLA LOUNGE
-        </button>
-        <button class="btn secondary" style="margin-top: 10px" onclick="aggiornaLista()">
-          AGGIORNA LISTA
-        </button>
-      </div>
-
-      <button class="btn secondary" style="max-width: 300px; margin-top: 15px" onclick="goBackMenu()">
+      
+      <button class="btn" style="max-width: 300px; margin-top: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="confermaEntraAFK()">
+        ENTRA NELLA LOUNGE
+      </button>
+      <button class="btn secondary" style="max-width: 300px; margin-top: 10px" onclick="goBackMenu()">
         INDIETRO
       </button>
     </div>
@@ -2035,66 +2009,99 @@
         document.getElementById("main-menu").style.display = "flex";
       }
 
-      // ---- MENU MULTIPLAYER NORMALE ----
+      // Funzione per entrare DIRETTAMENTE nella VIP Lounge dal Menu Principale
+      window.confermaEntraAFK = function() {
+        if (typeof io === "undefined") { alert("Errore connessione server."); return; }
+        if (!socket) socket = io();
+        
+        let nomeStanza = document.getElementById("afk-direct-room-name").value.trim();
+        let passStanza = document.getElementById("afk-direct-room-pass").value;
+        if (!nomeStanza) { alert("Inserisci un nome per la stanza!"); return; }
+        
+        myRoom = "[AFK] " + nomeStanza; 
+        gameMode = "multi";
+        
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
+        const pToken = document.getElementById("setup-token").value;
+        
+        // Salva il profilo se l'utente è loggato!
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
+        
+        socket.emit("joinSpecificRoom", { roomName: myRoom, roomPass: passStanza, name: pName, startMoney: 0 });
+        document.getElementById("afk-setup-menu").style.display = "none";
+        inizializzaEventiMultiplayer();
+      };
+
       function mostraCreaStanza() {
         document.getElementById("box-crea-stanza").style.display = "block";
         document.getElementById("box-lista-stanze").style.display = "none";
       }
+
       function mostraListaStanze() {
         document.getElementById("box-crea-stanza").style.display = "none";
         document.getElementById("box-lista-stanze").style.display = "block";
         aggiornaLista();
       }
 
-      // ---- MENU AFK LOUNGE ----
-      window.mostraCreaAFK = function() {
-        document.getElementById("box-crea-afk").style.display = "block";
-        document.getElementById("box-lista-afk").style.display = "none";
-      };
-      window.mostraListaAFK = function() {
-        document.getElementById("box-crea-afk").style.display = "none";
-        document.getElementById("box-lista-afk").style.display = "block";
-        aggiornaLista();
-      };
-
       function aggiornaLista() {
         if (typeof io !== "undefined") {
           if (!socket) socket = io();
 
+          // FORZIAMO LA LETTURA DELLE STANZE SUBITO!
           socket.on("roomList", function (roomsList) {
-            let normalContainer = document.getElementById("rooms-container");
-            let afkContainer = document.getElementById("afk-rooms-container");
-
-            let normalRooms = roomsList.filter(r => !r.name.includes("[AFK]"));
-            let afkRooms = roomsList.filter(r => r.name.includes("[AFK]"));
-
-            if (normalContainer) {
-              if (normalRooms.length === 0) {
-                normalContainer.innerHTML = "<i>Nessuna stanza attiva...</i>";
-              } else {
-                normalContainer.innerHTML = normalRooms.map(r => {
-                  let iconaLock = r.hasPass ? "🔒" : "";
-                  return "<div class='room-item' onclick='selezionaStanza(\"" + r.name + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + r.name + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
-                }).join("");
-              }
+            let container = document.getElementById("rooms-container");
+            if (!container) return;
+            if (roomsList.length === 0) {
+              container.innerHTML =
+                "<i>Nessuna stanza attiva al momento...</i>";
+              return;
             }
-
-            if (afkContainer) {
-              if (afkRooms.length === 0) {
-                afkContainer.innerHTML = "<i>Nessuna Lounge attiva...</i>";
-              } else {
-                afkContainer.innerHTML = afkRooms.map(r => {
-                  let iconaLock = r.hasPass ? "🔒" : "";
-                  // Pulisce il nome per la grafica togliendo la scritta [AFK] 
-                  let cleanName = r.name.replace("[AFK] ", "");
-                  return "<div class='afk-room-item' onclick='selezionaStanzaAFK(\"" + r.name + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + cleanName + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
-                }).join("");
-              }
-            }
+            container.innerHTML = roomsList
+              .map(function (r) {
+                let iconaLock = r.hasPass ? "🔒" : "";
+                return (
+                  "<div class='room-item' onclick='selezionaStanza(\"" +
+                  r.name +
+                  '", ' +
+                  r.hasPass +
+                  ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'>" +
+                  "<span><b>" +
+                  r.name +
+                  "</b> " +
+                  iconaLock +
+                  "</span><span style='font-size:0.8rem; color:#aaa;'>(" +
+                  r.playersCount +
+                  "/4)</span></div>"
+                );
+              })
+              .join("");
           });
 
           socket.emit("getRooms");
         }
+      }
+
+      function confermaCreaStanza() {
+        if (typeof io === "undefined") { alert("Errore connessione. Riprova!"); return; }
+        if (!socket) socket = io();
+        myRoom = document.getElementById("create-room-name").value.trim();
+        let roomPass = document.getElementById("create-room-pass").value;
+        let isAfk = document.getElementById("is-afk-room") && document.getElementById("is-afk-room").checked;
+        if (isAfk) myRoom = "[AFK] " + myRoom;
+        
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
+        const pToken = document.getElementById("setup-token").value;
+        
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
+        const startMoney = parseInt(document.getElementById("setup-money").value);
+
+        if (!myRoom) { alert("Inserisci un nome per la stanza!"); return; }
+        socket.emit("createRoom", { roomName: myRoom, roomPass: roomPass, name: pName, startMoney: startMoney });
+        inizializzaEventiMultiplayer();
       }
 
       function selezionaStanza(nomeStanza, haPassword) {
@@ -2104,66 +2111,22 @@
         document.getElementById("join-pass-box").style.display = haPassword ? "block" : "none";
       }
 
-      window.selezionaStanzaAFK = function(nomeStanza, haPassword) {
-        stanzaSelezionata = nomeStanza;
-        document.querySelectorAll(".afk-room-item").forEach((el) => (el.style.background = "transparent"));
-        event.currentTarget.style.background = "rgba(138, 43, 226, 0.3)";
-        document.getElementById("afk-join-pass-box").style.display = haPassword ? "block" : "none";
-      };
-
-      function confermaCreaStanza() {
-        if (typeof io === "undefined") { alert("Errore connessione. Riprova!"); return; }
-        if (!socket) socket = io();
-        myRoom = document.getElementById("create-room-name").value.trim();
-        let roomPass = document.getElementById("create-room-pass").value;
-        if (!myRoom) { alert("Inserisci un nome!"); return; }
-        avviaIngresso(myRoom, roomPass, parseInt(document.getElementById("setup-money").value), false);
-      }
-
-      window.confermaCreaAFK = function() {
-        if (typeof io === "undefined") { alert("Errore connessione. Riprova!"); return; }
-        if (!socket) socket = io();
-        let nomeStanza = document.getElementById("afk-create-room-name").value.trim();
-        let passStanza = document.getElementById("afk-create-room-pass").value;
-        if (!nomeStanza) { alert("Inserisci un nome!"); return; }
-        myRoom = "[AFK] " + nomeStanza; 
-        avviaIngresso(myRoom, passStanza, 0, false);
-      };
-
       function confermaEntraStanza() {
-        if (!stanzaSelezionata) { alert("Seleziona una stanza!"); return; }
+        if (!stanzaSelezionata) { alert("Seleziona una stanza dalla lista!"); return; }
         if (typeof io === "undefined") { alert("Errore di connessione."); return; }
         if (!socket) socket = io();
         myRoom = stanzaSelezionata;
         let roomPass = document.getElementById("join-room-pass").value;
-        avviaIngresso(myRoom, roomPass, parseInt(document.getElementById("setup-money").value), true);
-      }
-
-      window.confermaEntraAFK = function() {
-        if (!stanzaSelezionata) { alert("Seleziona una Lounge!"); return; }
-        if (typeof io === "undefined") { alert("Errore di connessione."); return; }
-        if (!socket) socket = io();
-        myRoom = stanzaSelezionata;
-        let roomPass = document.getElementById("afk-join-room-pass").value;
-        avviaIngresso(myRoom, roomPass, 0, true);
-      };
-
-      // Funzione centralizzata per l'ingresso
-      function avviaIngresso(roomTarget, passTarget, money, isJoin) {
-        gameMode = "multi";
+        
         let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
         const pToken = document.getElementById("setup-token").value;
-        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
-        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
-
-        if (isJoin) {
-          socket.emit("joinSpecificRoom", { roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money });
-        } else {
-          socket.emit("createRoom", { roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money });
-        }
         
-        document.getElementById("afk-setup-menu").style.display = "none";
-        document.getElementById("multi-setup-menu").style.display = "none";
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
+        const startMoney = parseInt(document.getElementById("setup-money").value);
+
+        socket.emit("joinSpecificRoom", { roomName: myRoom, roomPass: roomPass, name: pName, startMoney: startMoney });
         inizializzaEventiMultiplayer();
       }
 
@@ -2329,15 +2292,13 @@
 
         socket.on("userVoiceReady", function (peerIdTarget) {
           if (myPeer) {
+            // 🔥 FIX SINCRONIZZAZIONE VIDEO: Invia il FakeStream se non hai ancora attivato la tua cam!
             let streamDaInviare = (typeof myAudioStream !== 'undefined' && myAudioStream) ? myAudioStream : window.fakeStream;
             const call = myPeer.call(peerIdTarget, streamDaInviare); 
             if(call) {
                 call.on("stream", function (userAudioStream) {
-                  aggiungiMediaPlayer(peerIdTarget, userAudioStream, call);
+                  aggiungiMediaPlayer(peerIdTarget, userAudioStream);
                 });
-                // 🔥 ELIMINA IL FANTASMA SE L'AVVERSARIO CHIUDE/RIAPRE LA CHIAMATA
-                call.on("close", pulisciFantasma);
-                call.on("error", pulisciFantasma);
             }
           }
         });
@@ -3737,10 +3698,8 @@
           myPeer.on("call", function (call) {
               call.answer(window.fakeStream); 
               call.on("stream", function (userAudioStream) {
-                aggiungiMediaPlayer(call.peer, userAudioStream, call);
+                aggiungiMediaPlayer(call.peer, userAudioStream);
               });
-              call.on("close", pulisciFantasma);
-              call.on("error", pulisciFantasma);
           });
 
           myPeer.on("open", function (id) {
@@ -3749,14 +3708,7 @@
       };
 
       window.accendiMedia = function(conVideo = false) {
-        // 🔥 UCCIDE I TUOI FANTASMI CHIUDENDO LE TUE CONNESSIONI VECCHIE
-        if (myPeer) { 
-          for (let conns in myPeer.connections) {
-            myPeer.connections[conns].forEach(c => c.close());
-          }
-          myPeer.destroy(); 
-          myPeer = null; 
-        }
+        if (myPeer) { myPeer.destroy(); myPeer = null; }
         if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
 
         navigator.mediaDevices.getUserMedia({ video: conVideo, audio: true })
@@ -3790,10 +3742,8 @@
             myPeer.on("call", function (call) {
               call.answer(myAudioStream);
               call.on("stream", function (userAudioStream) {
-                aggiungiMediaPlayer(call.peer, userAudioStream, call);
+                aggiungiMediaPlayer(call.peer, userAudioStream);
               });
-              call.on("close", pulisciFantasma);
-              call.on("error", pulisciFantasma);
             });
 
             myPeer.on("open", function (id) {
@@ -3807,15 +3757,7 @@
 
       window.accendiMicrofono = function() { accendiMedia(false); };
 
-      function pulisciFantasma() {
-        // Funzione per eliminare i riquadri morti
-        let el1 = document.getElementById("wrapper-" + this.peer);
-        let el2 = document.getElementById("media-" + this.peer);
-        if (el1) el1.remove();
-        if (el2) el2.remove();
-      }
-
-      function aggiungiMediaPlayer(peerId, stream, callObj) {
+      function aggiungiMediaPlayer(peerId, stream) {
         if (!document.getElementById("media-" + peerId)) {
           const media = document.createElement("video"); 
           media.id = "media-" + peerId;
@@ -3829,7 +3771,6 @@
               media.style.objectFit = "cover";
               
               let wrapper = document.createElement("div");
-              wrapper.id = "wrapper-" + peerId;
               wrapper.style.position = "relative";
               wrapper.style.borderRadius = "12px";
               wrapper.style.overflow = "hidden";
@@ -3872,15 +3813,6 @@
               container.style.borderRadius = "8px";
 
               container.appendChild(media);
-          }
-
-          if (callObj) {
-            callObj.on("close", function() {
-              let el1 = document.getElementById("wrapper-" + peerId);
-              let el2 = document.getElementById("media-" + peerId);
-              if (el1) el1.remove();
-              if (el2) el2.remove();
-            });
           }
 
           let playPromise = media.play();
