@@ -1913,6 +1913,7 @@
         socket.off("stateSynced");
         socket.off("receiveTradeOffer");
         socket.off("tradeResult");
+        socket.off("userVoiceReady");
 
         socket.on("roomError", function (msg) {
           alert(msg);
@@ -1923,7 +1924,7 @@
           let container = document.getElementById("rooms-container");
           if (!container) return;
           if (roomsList.length === 0) {
-            container.innerHTML = "<i>Nessuna stanza attiva...</i>";
+            container.innerHTML = "<i>Nessuna stanza attiva al momento...</i>";
             return;
           }
 
@@ -2061,80 +2062,6 @@
         });
 
         socket.on("userVoiceReady", function (peerIdTarget) {
-          if (myPeer) {// INIZIO PARTITA O SALA AFK!
-        socket.on("gameStarted", function (roomData) {
-          document.getElementById("waiting-room-menu").style.display = "none";
-          
-          if (myRoom.includes("[AFK]")) {
-            document.getElementById("afk-ui").style.display = "flex";
-            inizializzaPeerPassivo(); // 🔥 ASCOLTO INVISIBILE
-          } else {
-            document.getElementById("game-ui").style.display = "flex";
-            renderBoard();
-            applicaStatoGioco(roomData);
-            if (!myPeer) accendiMicrofono(); 
-          }
-        });
-
-        socket.on("updateState", function (serverData) {
-          applicaStatoGioco(serverData);
-        });
-        socket.on("diceRolled", function (data) {
-          if (data.playerId !== socket.id) animateDice(data.d1, data.d2, function () {});
-        });
-
-        socket.on("stateSynced", function (data) {
-          players = data.players;
-          Object.keys(data.properties).forEach(function (k) {
-            properties[k].owner = data.properties[k].owner;
-            properties[k].houses = data.properties[k].houses;
-          });
-          if (data.logMsg) document.getElementById("game-log").innerHTML = data.logMsg;
-          
-          // 🔥 FIX RITARDO: SE ENTRI A PARTITA AFK INIZIATA, TI PORTA SUBITO DENTRO!
-          if (myRoom.includes("[AFK]")) {
-             document.getElementById("main-menu").style.display = "none";
-             document.getElementById("waiting-room-menu").style.display = "none";
-             document.getElementById("multi-setup-menu").style.display = "none";
-             document.getElementById("game-ui").style.display = "none";
-             document.getElementById("afk-ui").style.display = "flex";
-             inizializzaPeerPassivo(); 
-          } else {
-             updateTokens();
-          }
-        });
-
-        socket.on("receiveTradeOffer", function (data) {
-          if (String(data.targetId) === String(socket.id)) mostraPopupRicezioneScambio(data);
-        });
-
-        socket.on("tradeResult", function (data) {
-          if (String(data.offerta.fromId) === String(socket.id)) {
-            if (data.accepted) {
-              alert(data.targetName + " ha ACCETTATO lo scambio!");
-              let pRicevente = players.find(p => String(p.id) === String(data.targetId));
-              let pOfferente = players.find(p => String(p.id) === String(data.offerta.fromId));
-
-              pRicevente.money -= data.offerta.requestMoney;
-              pRicevente.money += data.offerta.offerMoney;
-              pOfferente.money += data.offerta.requestMoney;
-              pOfferente.money -= data.offerta.offerMoney;
-
-              data.offerta.mySelected.forEach(k => properties[k].owner = data.targetId);
-              data.offerta.hisSelected.forEach(k => {
-                properties[k].owner = data.offerta.fromId;
-                document.getElementById("tile-" + k).style.boxShadow = "inset 0 0 10px " + pOfferente.color;
-              });
-
-              updateTokens();
-              socket.emit("syncAction", { room: myRoom, players: players, properties: properties, logMsg: "Scambio concluso tra " + data.offerta.fromName + " e " + data.targetName });
-            } else {
-              alert(data.targetName + " ha RIFIUTATO lo scambio.");
-            }
-          }
-        });
-
-        socket.on("userVoiceReady", function (peerIdTarget) {
           if (myPeer) {
             // 🔥 FIX SINCRONIZZAZIONE VIDEO: Invia il FakeStream se non hai ancora attivato la tua cam!
             let streamDaInviare = (typeof myAudioStream !== 'undefined' && myAudioStream) ? myAudioStream : window.fakeStream;
@@ -2147,18 +2074,6 @@
           }
         });
       }
-            // 🔥 FIX SINCRONIZZAZIONE VIDEO: Invia il FakeStream se non hai ancora attivato la tua cam!
-            let streamDaInviare = (typeof myAudioStream !== 'undefined' && myAudioStream) ? myAudioStream : window.fakeStream;
-            const call = myPeer.call(peerIdTarget, streamDaInviare); 
-            if(call) {
-                call.on("stream", function (userAudioStream) {
-                  aggiungiMediaPlayer(peerIdTarget, userAudioStream);
-                });
-            }
-          }
-        });
-      }
-
       // ---- MOTORE FOTO PROFILO ----
       let myPhotoBase64 = null;
       window.elaboraFoto = function(event) {
