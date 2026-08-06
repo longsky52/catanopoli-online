@@ -673,22 +673,47 @@
 
     <div id="audio-container" style="display: none"></div>
 
+    <!-- SCHERMATA ACCESSO / REGISTRAZIONE -->
+    <div id="auth-menu" class="menu-screen">
+      <img src="logo-catanopoli.png" alt="Logo" class="menu-logo" id="auth-logo-img" />
+      <h2 style="color: var(--border-color); margin-bottom: 15px; font-size: 1.5rem;">ACCESSO VIP</h2>
+      
+      <div class="input-group">
+        <label>USERNAME:</label>
+        <input type="text" id="auth-username" placeholder="Inserisci username" />
+      </div>
+      <div class="input-group">
+        <label>PASSWORD:</label>
+        <input type="password" id="auth-password" placeholder="Inserisci password" />
+      </div>
+      
+      <div style="display: flex; gap: 10px; width: 100%; max-width: 300px; margin-top: 10px;">
+        <button class="btn" style="flex: 1; font-size: 0.8rem;" onclick="eseguiLogin()">ACCEDI</button>
+        <button class="btn secondary" style="flex: 1; font-size: 0.8rem; background: #2c4a8a; border-color: #1a2a5a; color: white;" onclick="eseguiRegistrazione()">REGISTRATI</button>
+      </div>
+
+      <div style="margin: 20px 0; width: 100%; max-width: 300px; text-align: center; border-bottom: 1px solid #444; line-height: 0.1em;">
+        <span style="background: var(--app-bg); padding: 0 10px; color: #888; font-size: 0.8rem;">OPPURE</span>
+      </div>
+
+      <button class="btn secondary" style="max-width: 300px; width: 100%;" onclick="entraComeOspite()">
+        GIOCA COME OSPITE
+      </button>
+    </div>
+
     <!-- MENU SETUP -->
-    <div id="main-menu" class="menu-screen">
-      <img
-        src="logo-catanopoli.png"
-        alt="Logo"
-        class="menu-logo"
-        id="menu-logo-img"
-      />
+    <div id="main-menu" class="menu-screen" style="display: none;">
+      <img src="logo-catanopoli.png" alt="Logo" class="menu-logo" />
+
+      <!-- INTESTAZIONE UTENTE LOGGATO -->
+      <div id="user-logged-info" style="display: none; width: 100%; max-width: 300px; text-align: center; margin-bottom: 15px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid #44ff44;">
+        <span style="color: white; font-size: 0.85rem;">Bentornato: <b id="logged-username" style="color: #44ff44;"></b></span><br>
+        <button class="btn secondary" style="margin-top: 8px; padding: 5px; font-size: 0.7rem; border-color: #bd2a2a; color: #bd2a2a;" onclick="eseguiLogout()">🚪 DISCONNETTI</button>
+      </div>
+
       <div class="input-group">
         <label>IL TUO NOME IN GIOCO:</label>
-        <input
-          type="text"
-          id="setup-name"
-          value=""
-          placeholder="Inserisci nome"
-        />
+        <input type="text" id="setup-name" value="" placeholder="Inserisci nome" />
       </div>
       <div class="input-group">
         <label>SOLDI INIZIALI:</label>
@@ -712,21 +737,16 @@
         </select>
       </div>
 
-      <!-- NUOVA SEZIONE FOTO FACOLTATIVA -->
       <div class="input-group" style="text-align: center; margin-bottom: 20px;">
-        <label style="color:#44ff44;">OPPURE SCATTA UNA FOTO (Facoltativo):</label>
-        <input type="file" id="camera-input" accept="image/*" capture="user" style="display:none;" onchange="elaboraFoto(event)">
+        <label style="color:#44ff44;">FOTO PROFILO:</label>
+        <input type="file" id="camera-input" accept="image/*" style="display:none;" onchange="elaboraFoto(event)">
         <button class="btn secondary" style="font-size: 0.8rem; border-color: #44ff44; color: #44ff44;" onclick="document.getElementById('camera-input').click()">
-          📸 APRI FOTOCAMERA / GALLERIA
+          📸 SCEGLI / SCATTA FOTO
         </button>
         <img id="preview-foto" src="" style="display:none; width: 60px; height: 60px; border-radius: 50%; margin: 10px auto 0; border: 2px solid var(--border-color); object-fit: cover; box-shadow: 0 0 10px rgba(0,0,0,0.8);">
       </div>
 
-      <button
-        class="btn"
-        style="max-width: 300px; margin-top: 10px"
-        onclick="showSetup('single')"
-      >
+      <button class="btn" style="max-width: 300px; margin-top: 10px" onclick="showSetup('single')">
         SINGLE PLAYER (VS BOT)
       </button>
       <button
@@ -1128,6 +1148,98 @@
       let currentTimerBtn = null; // Ricorda quale bottone aveva il timer
       let currentTimerSec = 0; // Ricorda i secondi rimasti
       let currentTimerCallback = null; // Ricorda l'azione da fare
+
+      // ---- MOTORE ACCOUNT (REGISTRAZIONE/LOGIN LOCALE) ----
+      let utenteLoggato = null;
+
+      function caricaUtenti() {
+        let data = localStorage.getItem("catanopoli_utenti");
+        return data ? JSON.parse(data) : {};
+      }
+
+      function salvaUtenti(utenti) {
+        localStorage.setItem("catanopoli_utenti", JSON.stringify(utenti));
+      }
+
+      window.eseguiRegistrazione = function() {
+        let user = document.getElementById("auth-username").value.trim();
+        let pass = document.getElementById("auth-password").value.trim();
+        if (!user || !pass) { alert("Inserisci Username e Password per registrarti!"); return; }
+        
+        let utenti = caricaUtenti();
+        if (utenti[user]) { alert("Questo Username esiste già! Scegline un altro o Accedi."); return; }
+        
+        utenti[user] = { password: pass, nomeInGioco: user, pedina: "🐘", foto: null };
+        salvaUtenti(utenti);
+        alert("✅ Registrazione completata! Ora sei connesso.");
+        eseguiLogin(user, pass); 
+      };
+
+      window.eseguiLogin = function(forzaUser, forzaPass) {
+        let user = forzaUser || document.getElementById("auth-username").value.trim();
+        let pass = forzaPass || document.getElementById("auth-password").value.trim();
+        if (!user || !pass) { alert("Inserisci Username e Password!"); return; }
+        
+        let utenti = caricaUtenti();
+        if (!utenti[user] || utenti[user].password !== pass) {
+          alert("❌ Username o Password errati!");
+          return;
+        }
+        
+        utenteLoggato = user;
+        document.getElementById("auth-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "flex";
+        
+        document.getElementById("setup-name").value = utenti[user].nomeInGioco;
+        document.getElementById("setup-token").value = utenti[user].pedina;
+        
+        document.getElementById("user-logged-info").style.display = "block";
+        document.getElementById("logged-username").innerText = user;
+
+        if (utenti[user].foto) {
+          myPhotoBase64 = utenti[user].foto;
+          let preview = document.getElementById("preview-foto");
+          preview.src = myPhotoBase64;
+          preview.style.display = "block";
+        } else {
+          myPhotoBase64 = null;
+          document.getElementById("preview-foto").style.display = "none";
+        }
+      };
+
+      window.entraComeOspite = function() {
+        utenteLoggato = null;
+        document.getElementById("auth-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "flex";
+        document.getElementById("user-logged-info").style.display = "none";
+        document.getElementById("setup-name").value = "";
+        myPhotoBase64 = null;
+        document.getElementById("preview-foto").style.display = "none";
+      };
+
+      window.eseguiLogout = function() {
+        utenteLoggato = null;
+        myPhotoBase64 = null;
+        document.getElementById("preview-foto").style.display = "none";
+        document.getElementById("setup-name").value = "";
+        document.getElementById("auth-username").value = "";
+        document.getElementById("auth-password").value = "";
+        document.getElementById("main-menu").style.display = "none";
+        document.getElementById("user-logged-info").style.display = "none";
+        document.getElementById("auth-menu").style.display = "flex";
+      };
+
+      window.salvaProfiloSeLoggato = function(nome, pedina, fotoBase64) {
+        if (utenteLoggato) {
+          let utenti = caricaUtenti();
+          if(utenti[utenteLoggato]) {
+              utenti[utenteLoggato].nomeInGioco = nome;
+              utenti[utenteLoggato].pedina = pedina;
+              utenti[utenteLoggato].foto = fotoBase64;
+              salvaUtenti(utenti);
+          }
+        }
+      };
 
       // ---- IMPOSTAZIONI GLOBALI AUDIO ----
       let volumeMusicaGlobale = 0.15;
@@ -1846,14 +1958,17 @@
         
         let nomeStanza = document.getElementById("afk-direct-room-name").value.trim();
         let passStanza = document.getElementById("afk-direct-room-pass").value;
-        
         if (!nomeStanza) { alert("Inserisci un nome per la stanza!"); return; }
         
         myRoom = "[AFK] " + nomeStanza; 
         gameMode = "multi";
         
-        let rawName = document.getElementById("setup-name").value || "Lucio";
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
         const pToken = document.getElementById("setup-token").value;
+        
+        // Salva il profilo se l'utente è loggato!
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+
         const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
         
         socket.emit("joinSpecificRoom", { roomName: myRoom, roomPass: passStanza, name: pName, startMoney: 0 });
@@ -1911,26 +2026,22 @@
       }
 
       function confermaCreaStanza() {
-        if (typeof io === "undefined") {
-          alert("Errore: Il server di gioco sta ancora caricando. Riprova tra 2 secondi!");
-          return;
-        }
+        if (typeof io === "undefined") { alert("Errore connessione. Riprova!"); return; }
         if (!socket) socket = io();
         myRoom = document.getElementById("create-room-name").value.trim();
         let roomPass = document.getElementById("create-room-pass").value;
-        
-        // CONTROLLO SALA AFK
         let isAfk = document.getElementById("is-afk-room") && document.getElementById("is-afk-room").checked;
         if (isAfk) myRoom = "[AFK] " + myRoom;
         
-        let rawName = document.getElementById("setup-name").value || "Lucio";
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
         const pToken = document.getElementById("setup-token").value;
-        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName); // Niente emoji se c'è foto!
+        
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
 
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
         const startMoney = parseInt(document.getElementById("setup-money").value);
 
         if (!myRoom) { alert("Inserisci un nome per la stanza!"); return; }
-
         socket.emit("createRoom", { roomName: myRoom, roomPass: roomPass, name: pName, startMoney: startMoney });
         inizializzaEventiMultiplayer();
       }
@@ -1946,14 +2057,15 @@
         if (!stanzaSelezionata) { alert("Seleziona una stanza dalla lista!"); return; }
         if (typeof io === "undefined") { alert("Errore di connessione."); return; }
         if (!socket) socket = io();
-
         myRoom = stanzaSelezionata;
         let roomPass = document.getElementById("join-room-pass").value;
         
-        let rawName = document.getElementById("setup-name").value || "Lucio";
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
         const pToken = document.getElementById("setup-token").value;
-        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName); // Niente emoji se c'è foto!
         
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
         const startMoney = parseInt(document.getElementById("setup-money").value);
 
         socket.emit("joinSpecificRoom", { roomName: myRoom, roomPass: roomPass, name: pName, startMoney: startMoney });
@@ -2229,9 +2341,10 @@
 
       function startGame(mode) {
         renderBoard();
-        let rawName = document.getElementById("setup-name").value || "Lucio";
-        const startMoney = parseInt(document.getElementById("setup-money").value);
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
         const pToken = document.getElementById("setup-token").value;
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+        const startMoney = parseInt(document.getElementById("setup-money").value);
 
         // MAGIA NINJA: Niente emoji nel nome se scatti la foto!
         const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
