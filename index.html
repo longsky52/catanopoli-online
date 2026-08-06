@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>Catanopoli - Edizione Lusso (Multigiocatore & Chat Vocale)</title>
+    <title>Catanopoli</title>
     
     <!-- MAGIA PER IL FULLSCREEN (COLLEGA IL MANIFEST) -->
     <link rel="manifest" href="manifest.json">
@@ -3766,9 +3766,16 @@
       let myPeer = null;
       let myAudioStream = null;
 
-      // Genera un Flusso Audio Vuoto per l'ascolto passivo
-      window.fakeStream = null;
-      try { window.fakeStream = new (window.AudioContext || window.webkitAudioContext)().createMediaStreamDestination().stream; } catch(e){}
+      // 🔥 CONFIGURAZIONE ANTI-BLOCCO (STUN + TURN SERVER per Xiaomi e reti mobili blindate)
+      const peerConfig = {
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+          ]
+        }
+      };
 
       // Genera un Flusso Audio Vuoto per l'ascolto passivo
       window.fakeStream = null;
@@ -3776,7 +3783,8 @@
 
       window.inizializzaPeerPassivo = function() {
           if (myPeer) return; 
-          myPeer = new Peer({ config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+          // 🔥 Applica il Server TURN Anti-blocco
+          myPeer = new Peer({ config: peerConfig.config }); 
           
           myPeer.on("call", function (call) {
               call.answer(window.fakeStream); 
@@ -3803,7 +3811,7 @@
         }
         if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
 
-        // 🔥 PARAMETRI SICURI: Diciamo al telefono esattamente che risoluzione vogliamo, così Xiaomi non va in crash!
+        // 🔥 PARAMETRI SICURI: Risoluzione stabile per non far crashare lo Xiaomi
         let mediaConstraints = conVideo 
           ? { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: true } 
           : { audio: true };
@@ -3834,7 +3842,8 @@
                 }
             }
 
-            myPeer = new Peer({ config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+            // 🔥 Applica il Server TURN Anti-blocco anche in trasmissione
+            myPeer = new Peer({ config: peerConfig.config }); 
             
             myPeer.on("call", function (call) {
               call.answer(myAudioStream);
