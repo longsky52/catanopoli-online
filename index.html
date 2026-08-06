@@ -3803,7 +3803,12 @@
         }
         if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
 
-        navigator.mediaDevices.getUserMedia({ video: conVideo, audio: true })
+        // 🔥 PARAMETRI SICURI: Diciamo al telefono esattamente che risoluzione vogliamo, così Xiaomi non va in crash!
+        let mediaConstraints = conVideo 
+          ? { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: true } 
+          : { audio: true };
+
+        navigator.mediaDevices.getUserMedia(mediaConstraints)
           .then(function (stream) {
             myAudioStream = stream;
 
@@ -3845,7 +3850,7 @@
             });
           })
           .catch(function (err) {
-            alert("⚠️ ERRORE PERMESSI!\n\nSei dentro TikTok/Instagram? Premi i 3 puntini in alto a destra e scegli 'APRI IN CHROME' o 'SAFARI'!");
+            alert("⚠️ ERRORE HARDWARE / PERMESSI:\n\n" + err.name + ": " + err.message + "\n\nAssicurati di non avere la fotocamera aperta in un'altra app e apri il link direttamente su Chrome o Safari!");
           });
       };
 
