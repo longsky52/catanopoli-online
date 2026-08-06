@@ -3766,27 +3766,22 @@
       let myPeer = null;
       let myAudioStream = null;
 
-      // 🔥 CONFIGURAZIONE ANTI-BLOCCO ESTREMA (STUN multipli + TURN TCP/UDP per 4G/5G italiani)
+      // 🔥 CONFIGURAZIONE ANTI-BLOCCO ESTREMA PER RETI MOBILI (4G/5G CGNAT)
       const peerConfig = {
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' },
+            { urls: 'stun:stun.l.google.com:443' }, // 🔥 Passa dalla porta sicura 443 (Imbloccabile)
+            { urls: 'stun:stun.cloudflare.com:3478' }, // 🔥 Server Cloudflare, buca i muri del 4G
             { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
             { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:relay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:relay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:relay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
           ],
           sdpSemantics: 'unified-plan',
           iceTransportPolicy: 'all'
         }
       };
-
       // Genera un Flusso Audio Vuoto per l'ascolto passivo
       window.fakeStream = null;
       try { window.fakeStream = new (window.AudioContext || window.webkitAudioContext)().createMediaStreamDestination().stream; } catch(e){}
