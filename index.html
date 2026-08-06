@@ -961,22 +961,22 @@
       <div class="modal-content" id="modal-content"></div>
     </div>
 
-    <!-- SALA AFK UI -->
-    <div id="afk-ui" class="menu-screen" style="display: none; justify-content: flex-start; padding-top: 50px;">
-      <h2 style="color: var(--border-color); margin-bottom: 5px; font-size: 2rem;">SALA AFK ☕</h2>
-      <p style="color: #aaa; margin-bottom: 20px; font-size: 0.9rem; text-align:center;">Chiacchiera in diretta con la tua stanza.</p>
+    <!-- SALA AFK UI DINAMICA -->
+    <div id="afk-ui" class="menu-screen" style="display: none; justify-content: flex-start; padding-top: 20px;">
+      <h2 style="color: var(--border-color); margin-bottom: 5px; font-size: 1.8rem;">SALA AFK ☕</h2>
+      <p style="color: #aaa; margin-bottom: 10px; font-size: 0.8rem; text-align:center;">Entra anche a partita iniziata!</p>
       
-      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; max-width: 400px; margin-bottom: 20px;">
-        <button class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.75rem;" onclick="accendiMedia(false)">🎙️ SOLO AUDIO</button>
-        <button class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.75rem;" onclick="accendiMedia(true)">📹 ATTIVA VIDEO</button>
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; max-width: 400px; margin-bottom: 15px;">
+        <button id="btn-afk-audio" class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.75rem;" onclick="accendiMedia(false)">🎙️ ATTIVA AUDIO</button>
+        <button id="btn-afk-video" class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.75rem;" onclick="accendiMedia(true)">📹 ATTIVA VIDEO</button>
         <button class="btn secondary" style="width: 100%; color: #bd2a2a; border-color: #bd2a2a; font-size: 0.8rem;" onclick="quitGame()">❌ ESCI DALLA STANZA</button>
       </div>
 
-      <!-- GRIGLIA VIDEO -->
-      <div id="afk-video-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; width: 100%; max-width: 800px; overflow-y: auto; padding: 10px; align-items:start;">
-        <!-- Il tuo video locale (Invisibile finché non premi il tasto video) -->
-        <div style="position: relative; border-radius: 12px; overflow: hidden; background: #000; border: 2px solid var(--border-color); aspect-ratio: 3/4; display: none;" id="my-video-wrapper">
-          <video id="my-local-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+      <!-- GRIGLIA VIDEO FLEXBOX (Si adatta al numero di persone) -->
+      <div id="afk-video-grid" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; align-content: center; gap: 10px; width: 100%; height: 60vh; overflow-y: auto; padding: 5px;">
+        <!-- Il tuo video locale -->
+        <div style="position: relative; border-radius: 12px; overflow: hidden; background: #000; border: 2px solid var(--border-color); flex: 1 1 40%; max-width: 48%; aspect-ratio: 3/4; min-height: 120px; display: none;" id="my-video-wrapper">
+          <video id="my-local-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
           <div style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">Tu</div>
         </div>
       </div>
@@ -1992,14 +1992,13 @@
           document.getElementById("waiting-room-menu").style.display = "none";
           
           if (myRoom.includes("[AFK]")) {
-            // MODALITA' SALA AFK (Niente tabellone)
             document.getElementById("afk-ui").style.display = "flex";
+            inizializzaPeerPassivo(); // 🔥 ASCOLTO INVISIBILE
           } else {
-            // GIOCO NORMALE
             document.getElementById("game-ui").style.display = "flex";
             renderBoard();
             applicaStatoGioco(roomData);
-            if (!myPeer) accendiMicrofono(); // Accende il mic a partita iniziata
+            if (!myPeer) accendiMicrofono(); 
           }
         });
 
@@ -2007,8 +2006,7 @@
           applicaStatoGioco(serverData);
         });
         socket.on("diceRolled", function (data) {
-          if (data.playerId !== socket.id)
-            animateDice(data.d1, data.d2, function () {});
+          if (data.playerId !== socket.id) animateDice(data.d1, data.d2, function () {});
         });
 
         socket.on("stateSynced", function (data) {
@@ -2017,53 +2015,45 @@
             properties[k].owner = data.properties[k].owner;
             properties[k].houses = data.properties[k].houses;
           });
-          if (data.logMsg)
-            document.getElementById("game-log").innerHTML = data.logMsg;
-          updateTokens();
+          if (data.logMsg) document.getElementById("game-log").innerHTML = data.logMsg;
+          
+          // 🔥 FIX RITARDO: SE ENTRI A PARTITA AFK INIZIATA, TI PORTA SUBITO DENTRO!
+          if (myRoom.includes("[AFK]")) {
+             document.getElementById("main-menu").style.display = "none";
+             document.getElementById("waiting-room-menu").style.display = "none";
+             document.getElementById("multi-setup-menu").style.display = "none";
+             document.getElementById("game-ui").style.display = "none";
+             document.getElementById("afk-ui").style.display = "flex";
+             inizializzaPeerPassivo(); 
+          } else {
+             updateTokens();
+          }
         });
 
         socket.on("receiveTradeOffer", function (data) {
-          if (String(data.targetId) === String(socket.id)) {
-            mostraPopupRicezioneScambio(data);
-          }
+          if (String(data.targetId) === String(socket.id)) mostraPopupRicezioneScambio(data);
         });
 
         socket.on("tradeResult", function (data) {
           if (String(data.offerta.fromId) === String(socket.id)) {
             if (data.accepted) {
               alert(data.targetName + " ha ACCETTATO lo scambio!");
-              let pRicevente = players.find(function (p) {
-                return String(p.id) === String(data.targetId);
-              });
-              let pOfferente = players.find(function (p) {
-                return String(p.id) === String(data.offerta.fromId);
-              });
+              let pRicevente = players.find(p => String(p.id) === String(data.targetId));
+              let pOfferente = players.find(p => String(p.id) === String(data.offerta.fromId));
 
               pRicevente.money -= data.offerta.requestMoney;
               pRicevente.money += data.offerta.offerMoney;
               pOfferente.money += data.offerta.requestMoney;
               pOfferente.money -= data.offerta.offerMoney;
 
-              data.offerta.mySelected.forEach(function (k) {
-                properties[k].owner = data.targetId;
-              });
-              data.offerta.hisSelected.forEach(function (k) {
+              data.offerta.mySelected.forEach(k => properties[k].owner = data.targetId);
+              data.offerta.hisSelected.forEach(k => {
                 properties[k].owner = data.offerta.fromId;
-                document.getElementById("tile-" + k).style.boxShadow =
-                  "inset 0 0 10px " + pOfferente.color;
+                document.getElementById("tile-" + k).style.boxShadow = "inset 0 0 10px " + pOfferente.color;
               });
 
               updateTokens();
-              socket.emit("syncAction", {
-                room: myRoom,
-                players: players,
-                properties: properties,
-                logMsg:
-                  "Scambio concluso tra " +
-                  data.offerta.fromName +
-                  " e " +
-                  data.targetName,
-              });
+              socket.emit("syncAction", { room: myRoom, players: players, properties: properties, logMsg: "Scambio concluso tra " + data.offerta.fromName + " e " + data.targetName });
             } else {
               alert(data.targetName + " ha RIFIUTATO lo scambio.");
             }
@@ -2071,11 +2061,100 @@
         });
 
         socket.on("userVoiceReady", function (peerIdTarget) {
-          if (myPeer && myAudioStream) {
-            const call = myPeer.call(peerIdTarget, myAudioStream);
-            call.on("stream", function (userAudioStream) {
-              aggiungiAudioPlayer(peerIdTarget, userAudioStream);
-            });
+          if (myPeer) {// INIZIO PARTITA O SALA AFK!
+        socket.on("gameStarted", function (roomData) {
+          document.getElementById("waiting-room-menu").style.display = "none";
+          
+          if (myRoom.includes("[AFK]")) {
+            document.getElementById("afk-ui").style.display = "flex";
+            inizializzaPeerPassivo(); // 🔥 ASCOLTO INVISIBILE
+          } else {
+            document.getElementById("game-ui").style.display = "flex";
+            renderBoard();
+            applicaStatoGioco(roomData);
+            if (!myPeer) accendiMicrofono(); 
+          }
+        });
+
+        socket.on("updateState", function (serverData) {
+          applicaStatoGioco(serverData);
+        });
+        socket.on("diceRolled", function (data) {
+          if (data.playerId !== socket.id) animateDice(data.d1, data.d2, function () {});
+        });
+
+        socket.on("stateSynced", function (data) {
+          players = data.players;
+          Object.keys(data.properties).forEach(function (k) {
+            properties[k].owner = data.properties[k].owner;
+            properties[k].houses = data.properties[k].houses;
+          });
+          if (data.logMsg) document.getElementById("game-log").innerHTML = data.logMsg;
+          
+          // 🔥 FIX RITARDO: SE ENTRI A PARTITA AFK INIZIATA, TI PORTA SUBITO DENTRO!
+          if (myRoom.includes("[AFK]")) {
+             document.getElementById("main-menu").style.display = "none";
+             document.getElementById("waiting-room-menu").style.display = "none";
+             document.getElementById("multi-setup-menu").style.display = "none";
+             document.getElementById("game-ui").style.display = "none";
+             document.getElementById("afk-ui").style.display = "flex";
+             inizializzaPeerPassivo(); 
+          } else {
+             updateTokens();
+          }
+        });
+
+        socket.on("receiveTradeOffer", function (data) {
+          if (String(data.targetId) === String(socket.id)) mostraPopupRicezioneScambio(data);
+        });
+
+        socket.on("tradeResult", function (data) {
+          if (String(data.offerta.fromId) === String(socket.id)) {
+            if (data.accepted) {
+              alert(data.targetName + " ha ACCETTATO lo scambio!");
+              let pRicevente = players.find(p => String(p.id) === String(data.targetId));
+              let pOfferente = players.find(p => String(p.id) === String(data.offerta.fromId));
+
+              pRicevente.money -= data.offerta.requestMoney;
+              pRicevente.money += data.offerta.offerMoney;
+              pOfferente.money += data.offerta.requestMoney;
+              pOfferente.money -= data.offerta.offerMoney;
+
+              data.offerta.mySelected.forEach(k => properties[k].owner = data.targetId);
+              data.offerta.hisSelected.forEach(k => {
+                properties[k].owner = data.offerta.fromId;
+                document.getElementById("tile-" + k).style.boxShadow = "inset 0 0 10px " + pOfferente.color;
+              });
+
+              updateTokens();
+              socket.emit("syncAction", { room: myRoom, players: players, properties: properties, logMsg: "Scambio concluso tra " + data.offerta.fromName + " e " + data.targetName });
+            } else {
+              alert(data.targetName + " ha RIFIUTATO lo scambio.");
+            }
+          }
+        });
+
+        socket.on("userVoiceReady", function (peerIdTarget) {
+          if (myPeer) {
+            // 🔥 FIX SINCRONIZZAZIONE VIDEO: Invia il FakeStream se non hai ancora attivato la tua cam!
+            let streamDaInviare = (typeof myAudioStream !== 'undefined' && myAudioStream) ? myAudioStream : window.fakeStream;
+            const call = myPeer.call(peerIdTarget, streamDaInviare); 
+            if(call) {
+                call.on("stream", function (userAudioStream) {
+                  aggiungiMediaPlayer(peerIdTarget, userAudioStream);
+                });
+            }
+          }
+        });
+      }
+            // 🔥 FIX SINCRONIZZAZIONE VIDEO: Invia il FakeStream se non hai ancora attivato la tua cam!
+            let streamDaInviare = (typeof myAudioStream !== 'undefined' && myAudioStream) ? myAudioStream : window.fakeStream;
+            const call = myPeer.call(peerIdTarget, streamDaInviare); 
+            if(call) {
+                call.on("stream", function (userAudioStream) {
+                  aggiungiMediaPlayer(peerIdTarget, userAudioStream);
+                });
+            }
           }
         });
       }
@@ -3463,55 +3542,58 @@
       let myPeer = null;
       let myAudioStream = null;
 
-      window.accendiMedia = function(conVideo = false) {
-        let btnMic = document.getElementById("btn-voice");
+      // Genera un Flusso Audio Vuoto per l'ascolto passivo
+      window.fakeStream = null;
+      try { window.fakeStream = new (window.AudioContext || window.webkitAudioContext)().createMediaStreamDestination().stream; } catch(e){}
 
-        if (myPeer && myAudioStream) {
-          let audioTrack = myAudioStream.getAudioTracks()[0];
-          if(audioTrack) audioTrack.enabled = !audioTrack.enabled;
+      window.inizializzaPeerPassivo = function() {
+          if (myPeer) return; 
+          myPeer = new Peer({ config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
           
-          if(btnMic) {
-              if (audioTrack && audioTrack.enabled) {
-                btnMic.style.background = "#3b7a3b";
-                btnMic.style.borderColor = "#2a5a2a";
-                btnMic.innerHTML = "🎤 AUDIO ON";
-              } else {
-                btnMic.style.background = "#bd2a2a";
-                btnMic.style.borderColor = "#7a1515";
-                btnMic.innerHTML = "🔇 MUTO";
-              }
-          }
-          return;
-        }
-        
-        myPeer = new Peer({
-          config: {
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' },
-              { urls: 'stun:stun2.l.google.com:19302' }
-            ]
-          }
-        });
+          myPeer.on("call", function (call) {
+              call.answer(window.fakeStream); 
+              call.on("stream", function (userAudioStream) {
+                aggiungiMediaPlayer(call.peer, userAudioStream);
+              });
+          });
 
-        navigator.mediaDevices
-          .getUserMedia({ video: conVideo, audio: true })
+          myPeer.on("open", function (id) {
+              if (socket) socket.emit("voiceReady", { room: myRoom, peerId: id });
+          });
+      };
+
+      window.accendiMedia = function(conVideo = false) {
+        if (myPeer) { myPeer.destroy(); myPeer = null; }
+        if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
+
+        navigator.mediaDevices.getUserMedia({ video: conVideo, audio: true })
           .then(function (stream) {
             myAudioStream = stream;
-            document.getElementById("game-log").innerHTML = conVideo ? "📹 Video e Audio collegati!" : "🎤 Microfono collegato!";
 
-            if (btnMic) {
-              btnMic.style.background = "#3b7a3b";
-              btnMic.style.borderColor = "#2a5a2a";
-              btnMic.innerHTML = "🎤 AUDIO ON";
+            let btnAudio = document.getElementById("btn-afk-audio");
+            let btnVideo = document.getElementById("btn-afk-video");
+            let btnMic = document.getElementById("btn-voice"); 
+            
+            if(conVideo) {
+               if(btnVideo) { btnVideo.style.background = "#bd2a2a"; btnVideo.innerHTML = "📹 SEI IN VIDEO"; }
+               if(btnAudio) { btnAudio.style.background = "#2c4a8a"; btnAudio.innerHTML = "🎙️ PASSA AD AUDIO"; }
+            } else {
+               if(btnAudio) { btnAudio.style.background = "#bd2a2a"; btnAudio.innerHTML = "🎙️ SEI IN AUDIO"; }
+               if(btnVideo) { btnVideo.style.background = "#3b7a3b"; btnVideo.innerHTML = "📹 PASSA A VIDEO"; }
+            }
+            if(btnMic) { btnMic.style.background = "#3b7a3b"; btnMic.style.borderColor = "#2a5a2a"; btnMic.innerHTML = "🎤 AUDIO ON"; }
+
+            if (document.getElementById("my-video-wrapper")) {
+                if(conVideo) {
+                    document.getElementById("my-video-wrapper").style.display = "flex";
+                    document.getElementById("my-local-video").srcObject = stream;
+                } else {
+                    document.getElementById("my-video-wrapper").style.display = "none";
+                }
             }
 
-            // Se siamo nella Sala AFK e abbiamo il video acceso, mostra la nostra telecamera locale!
-            if (conVideo && document.getElementById("my-video-wrapper")) {
-                document.getElementById("my-video-wrapper").style.display = "block";
-                document.getElementById("my-local-video").srcObject = stream;
-            }
-
+            myPeer = new Peer({ config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+            
             myPeer.on("call", function (call) {
               call.answer(myAudioStream);
               call.on("stream", function (userAudioStream) {
@@ -3520,30 +3602,25 @@
             });
 
             myPeer.on("open", function (id) {
-              if (socket) socket.emit("voiceReady", { room: myRoom, peerId: id });
+              if (socket) socket.emit("voiceReady", { room: myRoom, peerId: id }); 
             });
           })
           .catch(function (err) {
-            alert("⚠️ ERRORE PERMESSI!\n\n1. Controlla di aver dato il permesso a Microfono/Fotocamera.\n2. Se sei su TikTok/Instagram, premi i 3 puntini in alto a destra e scegli 'APRI IN CHROME' o 'SAFARI'!");
-            myPeer = null; 
+            alert("⚠️ ERRORE PERMESSI!\n\nSei dentro TikTok/Instagram? Premi i 3 puntini in alto a destra e scegli 'APRI IN CHROME' o 'SAFARI'!");
           });
       };
 
-      // Mantiene compatibile il vecchio tasto del tabellone per attivare solo l'audio
-      window.accendiMicrofono = function() {
-          accendiMedia(false);
-      };
+      window.accendiMicrofono = function() { accendiMedia(false); };
 
       function aggiungiMediaPlayer(peerId, stream) {
         if (!document.getElementById("media-" + peerId)) {
-          const media = document.createElement("video"); // Il video tag riproduce sia audio che video!
+          const media = document.createElement("video"); 
           media.id = "media-" + peerId;
           media.srcObject = stream;
           media.autoplay = true;
           media.playsInline = true;
           
           if (myRoom.includes("[AFK]")) {
-              // GRIGLIA VIDEO (SALA AFK)
               media.style.width = "100%";
               media.style.height = "100%";
               media.style.objectFit = "cover";
@@ -3554,6 +3631,9 @@
               wrapper.style.overflow = "hidden";
               wrapper.style.background = "#141b29";
               wrapper.style.border = "2px solid var(--border-color)";
+              wrapper.style.flex = "1 1 40%"; 
+              wrapper.style.maxWidth = "48%";
+              wrapper.style.minHeight = "120px";
               wrapper.style.aspectRatio = "3/4";
               
               let label = document.createElement("div");
@@ -3565,14 +3645,13 @@
               label.style.borderRadius = "4px";
               label.style.fontSize = "0.7rem";
               label.style.fontWeight = "bold";
-              label.innerText = "Connesso"; 
+              label.innerText = "Spettatore"; 
 
               wrapper.appendChild(media);
               wrapper.appendChild(label);
               document.getElementById("afk-video-grid").appendChild(wrapper);
               
           } else {
-              // SOLO AUDIO IN PARTITA (Nascosto ma ascoltabile)
               media.controls = true;
               media.style.width = "100%";
               media.style.height = "30px";
@@ -3594,7 +3673,6 @@
           let playPromise = media.play();
           if (playPromise !== undefined) {
             playPromise.catch(function (e) {
-              console.log("Auto-play bloccato dal browser. Sblocco automatico al click.");
               document.addEventListener("click", function sbloccaAudio() {
                 media.play();
                 document.removeEventListener("click", sbloccaAudio);
@@ -3663,7 +3741,6 @@
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        // Il telefono riconosce il gioco e spara il banner a schermo!
         document.getElementById('install-banner').style.display = 'block';
       });
 
@@ -3677,6 +3754,12 @@
           deferredPrompt = null;
         }
       });
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('sw.js');
+        });
+      }
     </script>
   </body>
 </html>
