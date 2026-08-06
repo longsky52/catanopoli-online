@@ -3766,30 +3766,30 @@
       let myPeer = null;
       let myAudioStream = null;
 
-      // 🔥 CONFIGURAZIONE ANTI-BLOCCO ESTREMA PER RETI MOBILI (4G/5G CGNAT)
+      // 🔥 CONFIGURAZIONE ANTI-BLOCCO ESTREMA PER RETI MOBILI E XIAOMI (CGNAT + IPv6)
       const peerConfig = {
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun.l.google.com:443' }, // 🔥 Passa dalla porta sicura 443 (Imbloccabile)
-            { urls: 'stun:stun.cloudflare.com:3478' }, // 🔥 Server Cloudflare, buca i muri del 4G
+            { urls: 'stun:global.stun.twilio.com:3478' },
             { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
             { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
             { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
           ],
           sdpSemantics: 'unified-plan',
-          iceTransportPolicy: 'all'
+          iceTransportPolicy: 'all',
+          iceCandidatePoolSize: 10 // 🔥 Trucco magico: prepara le porte 4G prima ancora di chiamare!
         }
       };
+
       // Genera un Flusso Audio Vuoto per l'ascolto passivo
       window.fakeStream = null;
       try { window.fakeStream = new (window.AudioContext || window.webkitAudioContext)().createMediaStreamDestination().stream; } catch(e){}
 
       window.inizializzaPeerPassivo = function() {
           if (myPeer) return; 
-          // 🔥 Applica il Server TURN Anti-blocco
-          myPeer = new Peer({ config: peerConfig.config }); 
+          myPeer = new Peer(peerConfig); 
           
           myPeer.on("call", function (call) {
               call.answer(window.fakeStream); 
@@ -3815,15 +3815,8 @@
         }
         if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
 
-        // 🔥 FIX CODEC XIAOMI: Togliamo la risoluzione rigida e chiediamo il formato standard universale!
         let mediaConstraints = conVideo 
-          ? { 
-              video: { 
-                facingMode: "user",
-                frameRate: { ideal: 24, max: 30 } 
-              }, 
-              audio: true 
-            } 
+          ? { video: { facingMode: "user" }, audio: true } // Lasciamo decidere la risoluzione al telefono per non mandarlo in panico
           : { audio: true, video: false };
 
         navigator.mediaDevices.getUserMedia(mediaConstraints)
@@ -3848,7 +3841,6 @@
                     document.getElementById("my-video-wrapper").style.display = "flex";
                     let myLocalVid = document.getElementById("my-local-video");
                     myLocalVid.srcObject = stream;
-                    // 🔥 Assicuriamoci che anche il TUO video parta correttamente senza blocchi
                     myLocalVid.setAttribute('autoplay', '');
                     myLocalVid.setAttribute('playsinline', '');
                 } else {
@@ -3872,7 +3864,7 @@
             });
           })
           .catch(function (err) {
-            alert("⚠️ ERRORE HARDWARE / PERMESSI:\n\n" + err.name + ": " + err.message + "\n\nAssicurati di aver dato il permesso fotocamera/microfono e usa Chrome!");
+            alert("⚠️ ERRORE HARDWARE / PERMESSI:\n\n" + err.name + ": " + err.message + "\n\nAssicurati di aver dato i permessi a Chrome e chiudi le altre app che usano la fotocamera!");
           });
       };
 
@@ -3889,14 +3881,19 @@
         if (!document.getElementById("media-" + peerId)) {
           const media = document.createElement("video"); 
           media.id = "media-" + peerId;
-          media.srcObject = stream;
           media.autoplay = true;
           media.playsInline = true;
           
-          // 🔥 FIX COMPATIBILITÀ IPHONE E ALTRI ANDROID: Devono avere queste etichette o mostrano schermo nero!
+          // 🔥 FIX APPLE & ANDROID: Etichette obbligatorie per evitare schermi neri
           media.setAttribute('autoplay', '');
           media.setAttribute('playsinline', '');
           
+          // 🔥 FIX XIAOMI: RISVEGLIO HARDWARE! Il video parte solo quando il chip dello Xiaomi l'ha decodificato
+          media.srcObject = stream;
+          media.onloadedmetadata = function(e) {
+              media.play().catch(err => console.log("Play bloccato dal browser", err));
+          };
+
           stream.oninactive = function() { distruggiVideo(peerId); };
 
           if (myRoom.includes("[AFK]")) {
@@ -3940,16 +3937,6 @@
           if (callObj) {
             callObj.on("close", function() { distruggiVideo(peerId); });
             callObj.on("error", function() { distruggiVideo(peerId); });
-          }
-
-          let playPromise = media.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(function (e) {
-              document.addEventListener("click", function sbloccaAudio() {
-                media.play();
-                document.removeEventListener("click", sbloccaAudio);
-              });
-            });
           }
         }
       }
