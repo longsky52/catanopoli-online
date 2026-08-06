@@ -1124,9 +1124,12 @@
     </div>
 
     <script>
-      document.getElementById("menu-logo-img").onerror = function () {
-        this.style.display = "none";
-      };
+      // FIX CRASH: Protezione sui loghi! Se non li trova, non fa crashare l'intero gioco.
+      let authLogo = document.getElementById("auth-logo-img");
+      if (authLogo) authLogo.onerror = function () { this.style.display = "none"; };
+      
+      let mainLogo = document.getElementById("menu-logo-img");
+      if (mainLogo) mainLogo.onerror = function () { this.style.display = "none"; };
 
       const colors = ["#bd2a2a", "#2c4a8a", "#3b7a3b", "#d1b438"];
       const botNames = ["Zio Turi", "Alfio", "Cettina"];
