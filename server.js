@@ -18,7 +18,7 @@ io.on("connection", (socket) => {
   });
 
   // 1. CREA LA STANZA
-  socket.on("createRoom", ({ roomName, roomPass, name, startMoney, gioco, tipoCarte, targetCarte }) => {
+  socket.on("createRoom", ({ roomName, roomPass, name, startMoney, gioco, tipoCarte, targetCarte, numPlayers }) => {
     if (rooms[roomName]) {
       socket.emit("roomError", "Esiste già una stanza con questo nome!");
       return;
@@ -31,6 +31,7 @@ io.on("connection", (socket) => {
       gioco: gioco || "catanopoli",
       tipoCarte: tipoCarte || "scopa",
       targetCarte: targetCarte || 11,
+      maxPlayers: gioco === "carte" ? (numPlayers || 2) : 4, // 🔥 ORA IL SERVER SA SE SIETE IN 2 O IN 4!
       players: [
         {
           id: socket.id, name: name, money: startMoney, position: 0,
@@ -53,9 +54,9 @@ io.on("connection", (socket) => {
     if (roomData.status !== "waiting") { socket.emit("roomError", "Partita già iniziata!"); return; }
     if (roomData.pass && roomData.pass !== roomPass) { socket.emit("roomError", "Password errata!"); return; }
     
-    // LIMITI GIOCATORI: 2 per le Carte, 4 per Catanopoli
-    let maxPlayers = roomData.gioco === "carte" ? 2 : 4;
-    if (roomData.players.length >= maxPlayers) { socket.emit("roomError", `Stanza piena (max ${maxPlayers})!`); return; }
+    // LIMITI GIOCATORI DINAMICI
+    let maxP = roomData.maxPlayers || 4;
+    if (roomData.players.length >= maxP) { socket.emit("roomError", `Stanza piena (max ${maxP})!`); return; }
 
     socket.join(roomName);
     const colors = ["#bd2a2a", "#2c4a8a", "#3b7a3b", "#d1b438"];
@@ -120,7 +121,7 @@ io.on("connection", (socket) => {
         const giocatoriAttivi = room.players.filter((p) => !p.bankrupt);
         if (giocatoriAttivi.length === 0) { delete rooms[roomName]; } 
         else if (room.status === "playing") {
-          io.to(roomName).emit("playerLeft", room.players[playerIndex].name); // Avvisa che l'altro è fuggito!
+          io.to(roomName).emit("playerLeft", room.players[playerIndex].name); 
           io.to(roomName).emit("updateState", room);
         } else { io.to(roomName).emit("waitingRoomUpdate", room); }
         io.emit("roomList", getPublicRooms());
@@ -135,7 +136,14 @@ function getPublicRooms() {
   for (const r in rooms) {
     if (rooms[r].status === "waiting") {
       let iconaGioco = rooms[r].gioco === "carte" ? "🃏" : "🎲";
-      list.push({ name: iconaGioco + " " + r, rawName: r, playersCount: rooms[r].players.length, hasPass: rooms[r].pass !== "", gioco: rooms[r].gioco });
+      list.push({ 
+          name: iconaGioco + " " + r, 
+          rawName: r, 
+          playersCount: rooms[r].players.length, 
+          hasPass: rooms[r].pass !== "", 
+          gioco: rooms[r].gioco, 
+          maxPlayers: rooms[r].maxPlayers || 4 
+      });
     }
   }
   return list;
