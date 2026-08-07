@@ -1,26 +1,27 @@
 // ==========================================
-// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V6 MULTIPLAYER ONLINE 🌐
+// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V7 MULTIPLAYER INFALLIBILE
 // ==========================================
 
 const semiCarte = ['oro', 'coppe', 'spade', 'bastoni'];
 const valoriCarte = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; 
+
 const puntiBriscola = { 1: 11, 3: 10, 10: 4, 9: 3, 8: 2, 7: 0, 6: 0, 5: 0, 4: 0, 2: 0 };
 const forzaBriscola = { 1: 12, 3: 11, 10: 10, 9: 9, 8: 8, 7: 7, 6: 6, 5: 5, 4: 4, 2: 2 };
 const valoriPrimiera = { 7: 21, 6: 18, 1: 16, 5: 15, 4: 14, 3: 13, 2: 12, 8: 10, 9: 10, 10: 10 };
 
-let targetPuntiVittoria = 120; let punteggioGlobaleMio = 0; let punteggioGlobaleBot = 0;
+const iconeSemi = { 'oro': '💰', 'coppe': '🍷', 'spade': '🗡️', 'bastoni': '🪵' };
+const coloriSemi = { 'oro': '#d4af37', 'coppe': '#bd2a2a', 'spade': '#2c4a8a', 'bastoni': '#3b7a3b' };
 
+let targetPuntiVittoria = 120; let punteggioGlobaleMio = 0; let punteggioGlobaleBot = 0;
 let mazzoAttuale = []; let mioGiocatore = { mano: [], prese: [], punti: 0, scope: 0 }; let avversarioBot = { mano: [], prese: [], punti: 0, scope: 0 };
 let carteAlCentro = []; let carteGiocateOra = []; let cartaBriscola = null; let carteSelezionateTavolo = [];
 let giocoInCorso = ""; let difficoltaBot = "medio"; let turnoDiChi = "io"; let faseAnimazione = false;
 let chiHaIniziatoMano = "io"; let ultimoAPrendere = "nessuno";
 
-// Variabili Multiplayer 🌐
-let isPartitaMultiplayer = false;
-let isHost = false;
-let roomMulti = "";
-
+// Variabili Multiplayer e Timer
+let isPartitaMultiplayer = false; let isHost = false; let roomMulti = "";
 let timerTurno = null; let secondiRimasti = 30;
+
 const attesa = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function generaMazzo() {
@@ -32,6 +33,7 @@ function generaMazzo() {
     }
     return nuovoMazzo;
 }
+
 function mescolaMazzo(mazzo) {
     for (let i = mazzo.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [mazzo[i], mazzo[j]] = [mazzo[j], mazzo[i]]; } return mazzo;
 }
@@ -43,7 +45,7 @@ window.avviaPartitaDaMenuCarte = function() {
 
     document.getElementById("cards-setup-menu").style.display = "none";
     document.getElementById("cards-ui").style.display = "flex";
-    avviaPartitaCarte(tipo, false, { diff: diff, target: target }); // Via al Single Player
+    avviaPartitaCarte(tipo, false, { diff: diff, target: target }); 
 }
 
 // 🌐 ENTRY POINT UNIVERSALE (Chiama sia il Single che il Multi)
@@ -60,7 +62,7 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
     let fotoTag = fotoSrc ? `<img src="${fotoSrc}" style="width:28px; height:28px; border-radius:50%; vertical-align:middle; margin-right:5px; border:2px solid #c99c51; object-fit:cover;">` : `🃏`;
 
     if (isMulti) {
-        roomMulti = datiAggiuntivi.name;
+        roomMulti = typeof myRoom !== 'undefined' ? myRoom : "StanzaSconosciuta";
         targetPuntiVittoria = datiAggiuntivi.targetCarte || 11;
         isHost = (datiAggiuntivi.hostId === socket.id);
         difficoltaBot = "UMANO";
@@ -68,7 +70,7 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
         let opp = datiAggiuntivi.players.find(p => p.id !== socket.id);
         document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${nomeUtente}</b> vs <b style="color:#ff4444;">${opp ? opp.name : "Avversario"}</b> <span style='font-size:0.7rem; color:#aaa;'>(Online)</span>`;
 
-        // 🌐 SOCKET: Ascolto pacchetti Rete
+        // 🌐 SOCKET: Ricezione Dati
         socket.off("riceviCarteSyncInit");
         socket.on("riceviCarteSyncInit", (data) => {
             if (!isHost) {
@@ -80,15 +82,8 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
         });
 
         socket.off("riceviCarteAzione");
-        socket.on("riceviCarteAzione", (data) => {
-            eseguiAzioneAvversarioRete(data.indexMano, data.indiciTavolo);
-        });
-
-        socket.off("playerLeft");
-        socket.on("playerLeft", (playerName) => {
-            alert(`L'avversario ${playerName} è fuggito! Hai vinto a tavolino.`);
-            window.esciDaTavoloCarte();
-        });
+        socket.on("riceviCarteAzione", (data) => { eseguiAzioneAvversarioRete(data.indexMano, data.indiciTavolo); });
+        socket.off("playerLeft"); socket.on("playerLeft", (playerName) => { alert(`L'avversario ${playerName} è fuggito! Hai vinto.`); window.esciDaTavoloCarte(); });
 
     } else {
         difficoltaBot = datiAggiuntivi.diff || "medio";
@@ -96,8 +91,10 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
         document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${nomeUtente}</b> vs Bot Zio Turi 🤖 <span style='font-size:0.7rem; color:#aaa;'>(${difficoltaBot.toUpperCase()})</span>`;
     }
 
-    let mediaContainer = document.getElementById("cards-media-buttons");
-    if(mediaContainer) mediaContainer.style.display = "none";
+    let mediaContainer = document.getElementById("cards-media-buttons"); if(mediaContainer) mediaContainer.style.display = "none";
+    let btnAud = document.getElementById("btn-cards-audio"); if(btnAud) btnAud.style.display = "none";
+    let btnVid = document.getElementById("btn-cards-video"); if(btnVid) btnVid.style.display = "none";
+
     iniziaNuovaSmazzata();
 }
 
@@ -111,17 +108,16 @@ async function iniziaNuovaSmazzata() {
     if (isPartitaMultiplayer) {
         if (isHost) {
             await distribuisciCarteAnimazione();
-            // L'Host innesca il tavolo e avvisa il Guest
-            setTimeout(() => {
-                socket.emit("carteSyncInit", {
-                    room: roomMulti, mazzoAttuale: mazzoAttuale, hostMano: mioGiocatore.mano, guestMano: avversarioBot.mano,
-                    carteAlCentro: carteAlCentro, cartaBriscola: cartaBriscola, chiHaIniziatoMano: chiHaIniziatoMano, turnoDiChi: turnoDiChi
-                });
-                gestisciTimer();
-            }, 500);
+            // 🔥 SPARA LE CARTE 4 VOLTE DI FILA PER ESSERE SICURO CHE ARRIVINO ALL'OSPITE CHE STA CARICANDO!
+            for(let syncs = 0; syncs < 4; syncs++) {
+                setTimeout(() => {
+                    socket.emit("carteSyncInit", { room: roomMulti, mazzoAttuale: mazzoAttuale, hostMano: mioGiocatore.mano, guestMano: avversarioBot.mano, carteAlCentro: carteAlCentro, cartaBriscola: cartaBriscola, chiHaIniziatoMano: chiHaIniziatoMano, turnoDiChi: turnoDiChi });
+                }, 500 + (syncs * 800));
+            }
+            gestisciTimer();
         } else {
-            document.getElementById("cards-turn-indicator").innerHTML = "Attendi il Mazziere (Host)...";
-            mazzoAttuale = []; aggiornaInterfaccia(); // Pulisce in attesa
+            document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>";
+            mazzoAttuale = []; aggiornaInterfaccia(); 
         }
     } else {
         await distribuisciCarteAnimazione();
@@ -132,9 +128,7 @@ async function iniziaNuovaSmazzata() {
 
 async function distribuisciCarteAnimazione() {
     mazzoAttuale = mescolaMazzo(generaMazzo()); aggiornaInterfaccia();
-    for (let i = 0; i < 3; i++) {
-        await attesa(300); mioGiocatore.mano.push(mazzoAttuale.pop()); avversarioBot.mano.push(mazzoAttuale.pop()); aggiornaInterfaccia();
-    }
+    for (let i = 0; i < 3; i++) { await attesa(300); mioGiocatore.mano.push(mazzoAttuale.pop()); avversarioBot.mano.push(mazzoAttuale.pop()); aggiornaInterfaccia(); }
     if (giocoInCorso === "scopa") {
         for (let i = 0; i < 4; i++) { await attesa(300); carteAlCentro.push(mazzoAttuale.pop()); aggiornaInterfaccia(); }
     } else if (giocoInCorso === "briscola") {
@@ -214,7 +208,10 @@ function aggiornaInterfaccia() {
     if (giocoInCorso === "briscola") { document.querySelector(".cards-hud span:first-child").innerHTML = `Round: Tu <b>${pMioDisp}</b> | Avv <b>${pBotDisp}</b> <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; } 
     else { document.querySelector(".cards-hud span:first-child").innerHTML = `Mano: <b>${mioGiocatore.prese.length}</b> carte (Scope: ${mioGiocatore.scope}) <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; }
     
-    let timerTesto = (turnoDiChi === "io" && !faseAnimazione) ? ` <span style='color:gold; font-size:0.9em;'>(⏱️ ${secondiRimasti}s)</span>` : "";
+    // Non scriviamo "Turno Tuo" se siamo guest ed è appena iniziato!
+    if (faseAnimazione || (!isHost && isPartitaMultiplayer && mazzoAttuale.length === 0)) return;
+    
+    let timerTesto = (turnoDiChi === "io") ? ` <span style='color:gold; font-size:0.9em;'>(⏱️ ${secondiRimasti}s)</span>` : "";
     document.getElementById("cards-turn-indicator").innerHTML = turnoDiChi === "io" ? `<span style='color:#44ff44'>Tuo Turno</span>${timerTesto}` : "<span style='color:#ff4444'>Turno Avversario...</span>";
 }
 
@@ -317,7 +314,7 @@ function turnoDelBot() {
             }
         }
         if(!presaFatta) indexManoScelto = Math.floor(Math.random() * avversarioBot.mano.length);
-        eseguiAzioneAvversarioRete(indexManoScelto, indiciDaPrendere); // Ricicliamo la funzione di rete per il bot
+        eseguiAzioneAvversarioRete(indexManoScelto, indiciDaPrendere); 
     } else {
         indexManoScelto = Math.floor(Math.random() * avversarioBot.mano.length);
         eseguiAzioneAvversarioRete(indexManoScelto, []);
@@ -418,7 +415,17 @@ function chiudiManoEContaPunti() {
             alert("🔥 PARTITA CONCLUSA! 🔥\n\n" + esito); window.esciDaTavoloCarte();
         } else {
             chiHaIniziatoMano = (chiHaIniziatoMano === "io") ? "avversario" : "io";
-            iniziaNuovaSmazzata();
+            
+            if (isPartitaMultiplayer) {
+                if (isHost) {
+                    iniziaNuovaSmazzata(); // Solo l'host decide quando riavviare la mano
+                } else {
+                    document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>";
+                    mazzoAttuale = []; aggiornaInterfaccia(); 
+                }
+            } else {
+                iniziaNuovaSmazzata();
+            }
         }
     }, 1500);
 }
