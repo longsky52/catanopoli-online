@@ -1,5 +1,5 @@
 // ==========================================
-// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V10 SINCRONIZZAZIONE DEFINITIVA
+// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V10 SINCRONIZZAZIONE DEFINITIVA E 4 GIOCATORI
 // ==========================================
 
 const semiCarte = ['oro', 'coppe', 'spade', 'bastoni'];
@@ -57,6 +57,7 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
     isPartitaMultiplayer = isMulti;
     numGiocatori = datiAggiuntivi.numPlayers || (isMulti && datiAggiuntivi.players ? datiAggiuntivi.players.length : 2);
     targetPuntiVittoria = datiAggiuntivi.targetCarte || datiAggiuntivi.target || 11;
+    punteggioGlobaleMio = 0; punteggioGlobaleBot = 0;
 
     let nomeUtente = document.getElementById("setup-name") ? document.getElementById("setup-name").value : "Tu";
     if(!nomeUtente) nomeUtente = "Tu";
@@ -92,6 +93,7 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
             indexTurnoAttuale = 1; // L'Host fa le carte, l'Ospite gioca!
         } 
 
+        // 🔥 LA SINCRONIZZAZIONE DEFINITIVA (Basata sugli ID Univoci e non sugli indici)
         socket.off("riceviCarteSyncInit");
         socket.on("riceviCarteSyncInit", (data) => {
             if (!isHost) {
@@ -99,7 +101,6 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
                 carteAlCentro = data.carteAlCentro; 
                 cartaBriscola = data.cartaBriscola;
                 
-                // 🔥 LA MAGIA: Convertiamo gli ID ricevuti nell'indice corretto per QUESTO telefono!
                 indexMazziere = giocatori.findIndex(g => g.id === data.mazziereId);
                 indexTurnoAttuale = giocatori.findIndex(g => g.id === data.turnoDiId);
                 
@@ -120,12 +121,15 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
             if(idxG !== -1) eseguiAzioneRete(idxG, data.indexMano, data.indiciTavolo);
         });
 
-        socket.off("playerLeft"); socket.on("playerLeft", (playerName) => { alert(`L'avversario ${playerName} è fuggito! Hai vinto.`); window.esciDaTavoloCarte(); });
+        socket.off("playerLeft"); socket.on("playerLeft", (playerName) => { alert(`L'avversario ${playerName} è fuggito! Hai vinto a tavolino.`); window.esciDaTavoloCarte(); });
     }
 
     let pToken = document.getElementById("setup-token") ? document.getElementById("setup-token").value : "👤";
     let fotoTag = miaFoto ? `<img src="${miaFoto}" style="width:28px; height:28px; border-radius:50%; vertical-align:middle; margin-right:5px; border:2px solid #c99c51; object-fit:cover;">` : `<span style="font-size:1.5rem; vertical-align:middle; margin-right:5px;">${pToken}</span>`;
-    document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${giocatori[0].name}</b> vs <b style="color:#ff4444;">Squadra Avversaria</b>`;
+    
+    // Mostriamo dinamicamente tutti i nomi degli avversari
+    let oppNames = giocatori.filter(g => g.team === 1).map(g => g.name).join(" e ");
+    document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${giocatori[0].name}</b> vs <b style="color:#ff4444;">${oppNames}</b>`;
 
     let mediaContainer = document.getElementById("cards-media-buttons"); if(mediaContainer) mediaContainer.style.display = "none";
     iniziaNuovaSmazzata();
@@ -142,7 +146,7 @@ async function iniziaNuovaSmazzata() {
             faseAnimazione = false; 
             aggiornaInterfaccia();
             
-            // L'host spara 3 volte i dati per essere sicuro che l'ospite li prenda!
+            // L'host spara i dati all'ospite!
             for(let syncs = 0; syncs < 3; syncs++) {
                 setTimeout(() => { 
                     socket.emit("carteSyncInit", { 
@@ -158,7 +162,7 @@ async function iniziaNuovaSmazzata() {
             }
             if(indexTurnoAttuale === 0) gestisciTimer();
         } else {
-            document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attesa Distribuzione...</span>";
+            document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>";
             mazzoAttuale = []; aggiornaInterfaccia(); 
         }
     } else {
@@ -246,7 +250,7 @@ function aggiornaInterfaccia() {
     let mazzoHTML = "";
     if (giocoInCorso === "briscola" && (cartaBriscola || mazzoAttuale.length > 0)) {
         let opacita = mazzoAttuale.length === 0 ? "0.6" : "1";
-        mazzoHTML = `<div style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 120px; height: 110px; opacity: ${opacita}; z-index: 10;">
+        mazzoHTML = `<div style="position: absolute; left: 50%; margin-left: 70px; top: 50%; transform: translateY(-50%); width: 120px; height: 110px; opacity: ${opacita}; z-index: 10;">
                 ${cartaBriscola ? `<div style="position: absolute; left: -10px; top: 15px; width: 75px; height: 105px;"><img src="${cartaBriscola.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius:6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); transform: rotate(90deg) scale(0.9);"></div>` : ""}
                 ${mazzoAttuale.length > 0 ? `<div class="playing-card card-back" style="position: absolute; left: 35px; top: 0; z-index: 5; box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div>` : ""}</div>`;
     } else if (giocoInCorso === "scopa" && mazzoAttuale.length > 0) {
@@ -297,7 +301,6 @@ function aggiornaInterfaccia() {
 window.tentaGiocataMia = function(indexMano) {
     if (indexTurnoAttuale !== 0 || faseAnimazione) return;
     fermaTimer();
-    
     let cartaMia = giocatori[0].mano[indexMano];
 
     if (giocoInCorso === "scopa") {
@@ -314,13 +317,13 @@ window.tentaGiocataMia = function(indexMano) {
     } else { completaGiocataBriscola(0, indexMano); }
 };
 
-// 🌐 RICEZIONE RETE
+// 🌐 RICEZIONE RETE: Identifica chi ha lanciato la carta in base all'ID unico
 function eseguiAzioneRete(pIndex, indexMano, indiciTavolo) {
     if (giocoInCorso === "scopa") completaGiocataScopa(pIndex, indexMano, indiciTavolo || []);
     else completaGiocataBriscola(pIndex, indexMano);
 }
 
-// 🤖 LOGICA BOT (Gestisce tutti i bot della stanza)
+// 🤖 LOGICA BOT
 function turnoDelBot(botIndex) {
     if (isPartitaMultiplayer || giocatori[botIndex].mano.length === 0) return;
     fermaTimer();
@@ -392,7 +395,7 @@ async function completaGiocataBriscola(pIndex, indexMano) {
         return;
     }
 
-    await attesa(2500); // Mostra lo scontro
+    await attesa(2500); 
 
     let semeBriscola = cartaBriscola ? cartaBriscola.seme : null;
     let semeIniziale = carteGiocateOra[0].carta.seme;
@@ -495,15 +498,13 @@ function chiudiManoEContaPunti() {
             let esito = punteggioGlobaleMio > punteggioGlobaleBot ? "🏆 IL TUO TEAM HA VINTO!" : (punteggioGlobaleMio === punteggioGlobaleBot ? "Pareggio!" : "☠️ Sconfitta.");
             alert("🔥 PARTITA CONCLUSA! 🔥\n\n" + esito); window.esciDaTavoloCarte();
         } else {
-            // L'Host smazza per tutti i turni in Multiplayer, ma cambiamo il primo a giocare!
-            indexTurnoAttuale = (indexTurnoAttuale + 1) % numGiocatori; 
+            indexMazziere = (indexMazziere + 1) % numGiocatori;
+            indexTurnoAttuale = (indexMazziere + 1) % numGiocatori;
+            
             if (isPartitaMultiplayer) {
                 if (isHost) iniziaNuovaSmazzata(); 
                 else { document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>"; mazzoAttuale = []; aggiornaInterfaccia(); }
-            } else {
-                indexMazziere = (indexMazziere + 1) % numGiocatori;
-                iniziaNuovaSmazzata();
-            }
+            } else iniziaNuovaSmazzata();
         }
     }, 1500);
 }
