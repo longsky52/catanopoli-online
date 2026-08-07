@@ -221,70 +221,83 @@ window.selezionaCartaTavolo = function(index) {
 
 function aggiornaInterfaccia() {
     let contenitoreUI = document.getElementById("cards-ui");
-    let divMiaMano = document.getElementById("my-hand"); let divAvversarioTop = document.getElementById("opponent-hand"); let divCentro = document.getElementById("cards-table-center");
+    let divMiaMano = document.getElementById("my-hand"); 
+    let divAvversarioTop = document.getElementById("opponent-hand"); 
+    let divCentro = document.getElementById("cards-table-center");
+    
+    // 1. RESTRINGIAMO IL QUADRATO CENTRALE PER CELLULARI
     divCentro.style.position = "relative";
+    divCentro.style.maxWidth = (numGiocatori === 4) ? "220px" : "400px";
+    divCentro.style.minHeight = (numGiocatori === 4) ? "260px" : "150px";
+    divCentro.style.margin = "auto";
+
     let vecchi = document.querySelectorAll("#mazzo-laterale"); vecchi.forEach(e => e.remove());
 
+    // IO (BASSO)
     divMiaMano.innerHTML = giocatori[0].mano.map((carta, index) => {
         let rot = (index - Math.floor(giocatori[0].mano.length/2)) * 8; let yOff = (index === Math.floor(giocatori[0].mano.length/2)) ? -10 : 0;
         return `<div class="playing-card" onclick="tentaGiocataMia(${index})" style="transform: rotate(${rot}deg) translateY(${yOff}px); z-index: ${10 + index}; padding:0; background:none; border:none; transition: all 0.3s ease;">
                 <img src="${carta.imgStr}" onerror="this.onerror=null; this.src='carte/fallback.png'; this.parentElement.innerHTML='<div class=\\'playing-card\\' style=\\'background:white; color:black; border: 2px solid #000;\\'>${carta.valore}</div>';" style="width:100%; height:100%; border-radius:8px; box-shadow: 2px 4px 10px rgba(0,0,0,0.6); pointer-events:none;"></div>`;
     }).join("");
 
+    // AVVERSARIO FRONTALE / SOCIO
     let indexAlto = numGiocatori === 2 ? 1 : 2;
     divAvversarioTop.innerHTML = giocatori[indexAlto].mano.map(() => `<div class="playing-card card-back" style="transition: all 0.3s ease;"></div>`).join("");
 
+    // 🔥 MANI LATERALI ISOLATE (Incolonnate e senza sbordare)
     if (numGiocatori === 4) {
         let leftHand = document.getElementById("left-hand-container");
-        if (!leftHand) { leftHand = document.createElement("div"); leftHand.id = "left-hand-container"; leftHand.style = "position:absolute; left:-20px; top:50%; transform:translateY(-50%) rotate(90deg); display:flex; gap:5px; pointer-events:none;"; contenitoreUI.appendChild(leftHand); }
-        leftHand.innerHTML = giocatori[3].mano.map(()=> `<div class="playing-card card-back" style="width:50px; height:75px; box-shadow:-2px 2px 5px black;"></div>`).join("");
+        if (!leftHand) { leftHand = document.createElement("div"); leftHand.id = "left-hand-container"; leftHand.style = "position:absolute; left: 5px; top:45%; transform:translateY(-50%); display:flex; flex-direction:column; gap:-25px; pointer-events:none; z-index:5;"; contenitoreUI.appendChild(leftHand); }
+        leftHand.innerHTML = giocatori[3].mano.map(()=> `<div class="playing-card card-back" style="width:45px; height:65px; box-shadow:-2px 2px 5px black; transform: rotate(90deg);"></div>`).join("");
 
         let rightHand = document.getElementById("right-hand-container");
-        if (!rightHand) { rightHand = document.createElement("div"); rightHand.id = "right-hand-container"; rightHand.style = "position:absolute; right:-20px; top:50%; transform:translateY(-50%) rotate(-90deg); display:flex; gap:5px; pointer-events:none;"; contenitoreUI.appendChild(rightHand); }
-        rightHand.innerHTML = giocatori[1].mano.map(()=> `<div class="playing-card card-back" style="width:50px; height:75px; box-shadow:2px -2px 5px black;"></div>`).join("");
+        if (!rightHand) { rightHand = document.createElement("div"); rightHand.id = "right-hand-container"; rightHand.style = "position:absolute; right: 5px; top:45%; transform:translateY(-50%); display:flex; flex-direction:column; gap:-25px; pointer-events:none; z-index:5;"; contenitoreUI.appendChild(rightHand); }
+        rightHand.innerHTML = giocatori[1].mano.map(()=> `<div class="playing-card card-back" style="width:45px; height:65px; box-shadow:2px -2px 5px black; transform: rotate(-90deg);"></div>`).join("");
     } else {
         let lh = document.getElementById("left-hand-container"); if(lh) lh.remove();
         let rh = document.getElementById("right-hand-container"); if(rh) rh.remove();
     }
 
+    // 🔥 MAZZO E BRISCOLA MESSI IN UN ANGOLO SICURO
     let mazzoHTML = "";
     if (giocoInCorso === "briscola" && (cartaBriscola || mazzoAttuale.length > 0)) {
         let opacita = mazzoAttuale.length === 0 ? "0.6" : "1";
-        mazzoHTML = `<div style="position: absolute; left: 50%; margin-left: 70px; top: 50%; transform: translateY(-50%); width: 120px; height: 110px; opacity: ${opacita}; z-index: 10;">
-                ${cartaBriscola ? `<div style="position: absolute; left: -10px; top: 15px; width: 75px; height: 105px;"><img src="${cartaBriscola.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius:6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); transform: rotate(90deg) scale(0.9);"></div>` : ""}
-                ${mazzoAttuale.length > 0 ? `<div class="playing-card card-back" style="position: absolute; left: 35px; top: 0; z-index: 5; box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div>` : ""}</div>`;
+        mazzoHTML = `<div style="position: absolute; right: 0px; top: 10px; width: 70px; height: 90px; opacity: ${opacita}; z-index: 1;">
+                ${cartaBriscola ? `<div style="position: absolute; left: -20px; top: 10px; width: 55px; height: 80px;"><img src="${cartaBriscola.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius:6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); transform: rotate(90deg) scale(0.9);"></div>` : ""}
+                ${mazzoAttuale.length > 0 ? `<div class="playing-card card-back" style="position: absolute; left: 10px; top: 0; width:50px; height:75px; z-index: 5; box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:22px; height:22px; display:flex; justify-content:center; align-items:center; position:absolute; top:-8px; right:-8px; font-weight:bold; font-size:0.7rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div>` : ""}</div>`;
     } else if (giocoInCorso === "scopa" && mazzoAttuale.length > 0) {
-        let posizioneMazzo = "right: 20px; top: -60px;"; 
-        if (indexMazziere === 0) posizioneMazzo = "right: 20px; bottom: -60px;";
-        else if (indexMazziere === 3) posizioneMazzo = "left: 10px; top: 50%; transform: translateY(-50%);";
-        else if (indexMazziere === 1) posizioneMazzo = "right: 10px; top: 50%; transform: translateY(-50%);";
+        let posizioneMazzo = "right: 10px; top: -30px;"; 
+        if (indexMazziere === 0) posizioneMazzo = "right: 10px; bottom: -30px;";
+        else if (indexMazziere === 3) posizioneMazzo = "left: -10px; top: 10px;";
+        else if (indexMazziere === 1) posizioneMazzo = "right: -10px; top: 10px;";
 
-        mazzoHTML = `<div style="position: absolute; ${posizioneMazzo} z-index: 10; transition: all 0.5s ease;"><div class="playing-card card-back" style="box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div></div>`;
+        mazzoHTML = `<div style="position: absolute; ${posizioneMazzo} z-index: 1; transition: all 0.5s ease;"><div class="playing-card card-back" style="width:45px; height:65px; box-shadow: -4px 4px 10px rgba(0,0,0,0.8); transform: rotate(15deg);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:20px; height:20px; display:flex; justify-content:center; align-items:center; position:absolute; top:-8px; right:-8px; font-weight:bold; font-size:0.7rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div></div>`;
     }
 
     let centroHTML = "";
     if (giocoInCorso === "scopa") {
         centroHTML += carteAlCentro.map((carta, i) => {
             let selectedClass = carteSelezionateTavolo.includes(i) ? "selezionata" : "";
-            return `<div class="playing-card ${selectedClass}" onclick="selezionaCartaTavolo(${i})" style="width: clamp(55px, 16vw, 75px); height: clamp(82px, 24vw, 112px); padding:0; background:none; border:none; z-index:5; transition: all 0.3s ease;"><img src="${carta.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width:100%; height:100%; border-radius:6px; pointer-events:none;"></div>`;
+            return `<div class="playing-card ${selectedClass}" onclick="selezionaCartaTavolo(${i})" style="width: clamp(45px, 13vw, 65px); height: clamp(67px, 19vw, 97px); padding:0; background:none; border:none; z-index:5; transition: all 0.3s ease; margin:2px;"><img src="${carta.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width:100%; height:100%; border-radius:6px; pointer-events:none;"></div>`;
         }).join("");
     }
 
+    // DISPOSIZIONE A CROCE PIÙ PICCOLA E COMPATTA
     let sceseHTML = carteGiocateOra.map((giocata) => {
         let coloreGlow = giocata.proprietarioIndex % 2 === 0 ? "#44ff44" : "#ff4444";
-        let posStyle = "position:relative; margin: 0 10px;";
-        if (numGiocatori === 4) {
-            if (giocata.proprietarioIndex === 0) posStyle = "position:absolute; bottom:-20px; left:50%; transform:translateX(-50%);";
-            if (giocata.proprietarioIndex === 1) posStyle = "position:absolute; right:-10px; top:50%; transform:translateY(-50%);";
-            if (giocata.proprietarioIndex === 2) posStyle = "position:absolute; top:-20px; left:50%; transform:translateX(-50%);";
-            if (giocata.proprietarioIndex === 3) posStyle = "position:absolute; left:-10px; top:50%; transform:translateY(-50%);";
+        let posStyle = "position:relative; margin: 0 5px;";
+        if (numGiocatori === 4 && giocoInCorso === "briscola") {
+            if (giocata.proprietarioIndex === 0) posStyle = "position:absolute; bottom:5px; left:50%; transform:translateX(-50%);";
+            if (giocata.proprietarioIndex === 1) posStyle = "position:absolute; right:5px; top:50%; transform:translateY(-50%);";
+            if (giocata.proprietarioIndex === 2) posStyle = "position:absolute; top:5px; left:50%; transform:translateX(-50%);";
+            if (giocata.proprietarioIndex === 3) posStyle = "position:absolute; left:5px; top:50%; transform:translateY(-50%);";
         }
-        return `<div style="width: 80px; height: 120px; border-radius:8px; box-shadow: 0 0 15px ${coloreGlow}; z-index:20; transition: all 0.3s ease; ${posStyle}"><img src="${giocata.carta.imgStr}" style="width:100%; height:100%; border-radius:8px;"></div>`;
+        return `<div style="width: 55px; height: 85px; border-radius:6px; box-shadow: 0 0 10px ${coloreGlow}; z-index:20; transition: all 0.3s ease; ${posStyle}"><img src="${giocata.carta.imgStr}" style="width:100%; height:100%; border-radius:6px;"></div>`;
     }).join("");
 
-    let croceStyle = numGiocatori === 4 ? "width: 250px; height: 250px; display:block; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);" : "width:100%; display:flex; justify-content:center; margin-top:15px; position:absolute; bottom: 20px; left:0;";
+    let croceStyle = (numGiocatori === 4 && giocoInCorso === "briscola") ? "width: 170px; height: 170px; display:block; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);" : "width:100%; display:flex; justify-content:center; margin-top:15px; position:absolute; bottom: 10px; left:0;";
 
-    divCentro.innerHTML = centroHTML + mazzoHTML + `<div style='pointer-events:none; z-index: 30; ${croceStyle}'>` + sceseHTML + "</div>";
+    divCentro.innerHTML = `<div style="display:flex; flex-wrap:wrap; justify-content:center; align-content:center; width:100%; height:100%; padding:10px;">` + centroHTML + `</div>` + mazzoHTML + `<div style='pointer-events:none; z-index: 30; ${croceStyle}'>` + sceseHTML + "</div>";
 
     let pMioDisp = giocatori[0].punti + (numGiocatori===4 ? giocatori[2].punti : 0); 
     let pBotDisp = giocatori[1].punti + (numGiocatori===4 ? giocatori[3].punti : 0);
