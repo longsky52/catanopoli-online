@@ -1060,6 +1060,14 @@
       <h2 style="color: var(--border-color); margin-bottom: 20px">ADDIVETTITI MBARE</h2>
       
       <div class="input-group">
+        <label>GIOCATORI:</label>
+        <select id="cards-setup-players">
+          <option value="2">2 Giocatori (1v1)</option>
+          <option value="4">4 Giocatori (A Coppie)</option>
+        </select>
+      </div>
+
+      <div class="input-group">
         <label>SCEGLI IL GIOCO:</label>
         <select id="cards-setup-tipo" onchange="aggiornaOpzioniCarte()">
           <option value="scopa">🧹 Scopa</option>
@@ -1151,18 +1159,24 @@
 
         <!-- 🔥 IMPOSTAZIONI AGGIUNTIVE MULTIPLAYER CARTE -->
         <div id="multi-cards-options" style="display:none; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-top:10px; margin-bottom: 10px;">
-            <label style="color: #c99c51; font-weight: bold; font-size: 0.8rem; display:block; margin-bottom: 5px;">REGOLE TAVOLO VERDE:</label>
-            <div style="display:flex; gap:10px;">
-                <select id="multi-cards-tipo" onchange="aggiornaMultiCarte()" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
-                    <option value="scopa">🧹 Scopa</option>
-                    <option value="briscola">👊 Briscola</option>
-                </select>
-                <select id="multi-cards-target" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
-                    <option value="11">11 Punti</option>
-                    <option value="21">21 Punti</option>
-                    <option value="51">51 Punti</option>
-                </select>
-            </div>
+          <label style="color: #c99c51; font-weight: bold; font-size: 0.8rem; display:block; margin-bottom: 5px;">REGOLE TAVOLO VERDE:</label>
+          
+          <select id="multi-cards-players" style="width:100%; padding:6px; margin-bottom:10px; font-size:0.8rem; font-weight:bold;">
+              <option value="2">2 Giocatori (1v1)</option>
+              <option value="4">4 Giocatori (A Coppie)</option>
+          </select>
+
+          <div style="display:flex; gap:10px;">
+              <select id="multi-cards-tipo" onchange="aggiornaMultiCarte()" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
+                  <option value="scopa">🧹 Scopa</option>
+                  <option value="briscola">👊 Briscola</option>
+              </select>
+              <select id="multi-cards-target" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
+                  <option value="11">11 Punti</option>
+                  <option value="21">21 Punti</option>
+                  <option value="51">51 Punti</option>
+              </select>
+          </div>
             <script>
                 function aggiornaMultiCarte() {
                     let t = document.getElementById("multi-cards-tipo").value;
@@ -1406,7 +1420,7 @@
       <h2 style="color: #c99c51; margin-top: 15px; margin-bottom: 0px; font-size: 1.5rem; text-shadow: 0 2px 4px black; text-align: center; border-bottom: 1px solid #c99c51; padding-bottom: 5px;">ADDIVETTITI</h2>
       
       <!-- AVVERSARIO -->
-      <div style="text-align: center; color: white; font-weight: bold; margin-top: 10px; font-size: 0.85rem;"> <span id="cards-opponent-name" style="color: #ff4444;">In attesa...</span></div>
+      <div style="text-align: center; color: white; font-weight: bold; margin-top: 10px; font-size: 0.85rem;">Avversario: <span id="cards-opponent-name" style="color: #ff4444;">In attesa...</span></div>
       <div class="opponent-hand" id="opponent-hand">
         <div class="playing-card card-back"></div>
         <div class="playing-card card-back"></div>
@@ -2439,9 +2453,7 @@
         if (typeof io !== "undefined") {
           if (!socket) socket = io();
 
-          // 🔥 Rimuoviamo vecchi ascoltatori per evitare che impazzisca
           socket.off("roomList"); 
-
           socket.on("roomList", function (roomsList) {
             let normalContainer = document.getElementById("rooms-container");
             let afkContainer = document.getElementById("afk-rooms-container");
@@ -2455,8 +2467,9 @@
               } else {
                 normalContainer.innerHTML = normalRooms.map(r => {
                   let iconaLock = r.hasPass ? "🔒" : "";
-                  let limite = r.gioco === 'carte' ? '/2' : '/4';
-                  return "<div class='room-item' onclick='selezionaStanza(\"" + r.rawName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + r.name + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + limite + ")</span></div>";
+                  let trueName = r.rawName || r.name.replace("🃏 ", "").replace("🎲 ", "");
+                  let limite = r.maxPlayers || (r.gioco === 'carte' ? 2 : 4);
+                  return "<div class='room-item' onclick='selezionaStanza(\"" + trueName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + r.name + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/" + limite + ")</span></div>";
                 }).join("");
               }
             }
@@ -2468,12 +2481,12 @@
                 afkContainer.innerHTML = afkRooms.map(r => {
                   let iconaLock = r.hasPass ? "🔒" : "";
                   let cleanName = r.name.replace("[AFK] ", "");
-                  return "<div class='afk-room-item' onclick='selezionaStanzaAFK(\"" + r.rawName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + cleanName + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
+                  let trueName = r.rawName || r.name;
+                  return "<div class='afk-room-item' onclick='selezionaStanzaAFK(\"" + trueName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + cleanName + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
                 }).join("");
               }
             }
           });
-
           socket.emit("getRooms");
         }
       }
@@ -2540,16 +2553,18 @@
         if (isJoin) {
           socket.emit("joinSpecificRoom", { roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money });
         } else {
-          // 🔥 LEGGE DAI NUOVI SELETTORI MULTIPLAYER DELLE CARTE!
           let mCarteTipo = document.getElementById("multi-cards-tipo");
           let mCartePunti = document.getElementById("multi-cards-target");
+          let mCartePlayers = document.getElementById("multi-cards-players"); // 🔥 LEGGIAMO IL NUMERO DI GIOCATORI
           
           let tCarte = mCarteTipo ? mCarteTipo.value : "scopa";
           let tPunti = mCartePunti ? parseInt(mCartePunti.value) : 11;
+          let tPlayers = mCartePlayers ? parseInt(mCartePlayers.value) : 2;
           
           socket.emit("createRoom", { 
               roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money, 
-              gioco: window.giocoSelezionato, tipoCarte: tCarte, targetCarte: tCarte === "briscola" ? 120 : tPunti
+              gioco: window.giocoSelezionato, tipoCarte: tCarte, targetCarte: tCarte === "briscola" ? 120 : tPunti,
+              numPlayers: tPlayers // 🔥 PASSATO AL SERVER
           });
         }
         
@@ -2630,15 +2645,15 @@
           document.getElementById("waiting-players-list").innerHTML =
             listaGiocatoriHTML;
 
-          if (socket.id === roomData.hostId) {
+            if (socket.id === roomData.hostId) {
             document.getElementById("waiting-text").style.display = "none";
             let btnAvvia = document.getElementById("btn-start-multi");
             btnAvvia.style.display = "flex";
-            btnAvvia.disabled = roomData.players.length < 2;
-            btnAvvia.innerHTML =
-              roomData.players.length < 2
-                ? "ATTENDI GIOCATORI..."
-                : "AVVIA PARTITA";
+            
+            // 🔥 ORA ASPETTA 2 O 4 GIOCATORI A SECONDA DEL LIMITE DELLA STANZA
+            let maxP = roomData.maxPlayers || 4;
+            btnAvvia.disabled = roomData.players.length < maxP;
+            btnAvvia.innerHTML = roomData.players.length < maxP ? `ATTENDI GIOCATORI (${roomData.players.length}/${maxP})...` : "AVVIA PARTITA";
           } else {
             document.getElementById("waiting-text").style.display = "block";
             document.getElementById("btn-start-multi").style.display = "none";
