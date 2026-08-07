@@ -174,6 +174,78 @@
         padding-bottom: 10px;
       }
 
+      /* === STILI SALA GIOCHI (TOTALITY GAME HUB) === */
+      .game-hub-title {
+        color: #c99c51;
+        font-size: 1.5rem;
+        margin: 15px 0 10px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        border-bottom: 2px solid #c99c51;
+        padding-bottom: 5px;
+        width: 100%;
+        max-width: 350px;
+        text-align: center;
+      }
+      .game-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        width: 100%;
+        max-width: 350px;
+        margin-bottom: 20px;
+      }
+      .game-card {
+        background: rgba(20, 27, 41, 0.9);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        position: relative;
+      }
+      .game-card.locked {
+        border-color: #555;
+        background: rgba(10, 10, 10, 0.8);
+        color: #777;
+        overflow: hidden;
+      }
+      .game-card.locked::after {
+        content: "🔒 IN SVILUPPO";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-5deg);
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #bd2a2a;
+        text-shadow: 2px 2px 5px black;
+        white-space: nowrap;
+        pointer-events: none;
+        background: rgba(0,0,0,0.8);
+        padding: 5px 15px;
+        border-radius: 8px;
+        border: 2px solid #bd2a2a;
+      }
+      .game-title {
+        font-size: 1.4rem;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: var(--border-color);
+        text-align: center;
+      }
+      .game-card.locked .game-title {
+        color: #777;
+      }
+      .game-desc {
+        font-size: 0.85rem;
+        color: #ccc;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+
       /* LAYOUT SCAMBI E MINI-CARTE */
       .trade-list {
         display: flex;
@@ -220,6 +292,110 @@
         line-height: 1.1;
         margin-top: 2px;
       }
+
+
+      /* === TAVOLO VERDE (CARTE SICILIANE) === */
+      #cards-ui {
+        background: radial-gradient(circle at 50% 40%, #1a5c2b 0%, #0a2610 100%);
+        padding-bottom: 20px;
+        display: none;
+        flex-direction: column;
+        height: 100vh;
+        width: 100%;
+        position: relative;
+        z-index: 50;
+      }
+      .cards-table-center {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-content: center;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        width: 100%;
+        max-width: 500px;
+        margin: auto;
+        padding: 10px;
+        border: 2px dashed rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+      }
+      .player-hand {
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        gap: -20px; /* Sovrapposizione delle carte in mano */
+        margin-bottom: 10px;
+        min-height: 120px;
+      }
+      .opponent-hand {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 5px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+        min-height: 80px;
+      }
+      .card-slot {
+        width: clamp(50px, 15vw, 80px);
+        aspect-ratio: 2/3;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 6px;
+      }
+      .playing-card {
+        width: clamp(65px, 18vw, 90px);
+        aspect-ratio: 2/3;
+        background: #fdf5e6;
+        border: 2px solid #000;
+        border-radius: 8px;
+        box-shadow: 2px 4px 10px rgba(0,0,0,0.6);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        font-size: clamp(1rem, 3vw, 1.5rem);
+        color: black;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        position: relative;
+        z-index: 10;
+      }
+      .playing-card:hover, .playing-card:active {
+        transform: translateY(-15px) scale(1.05);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.9);
+        z-index: 20;
+      }
+      /* AGGIUNGI QUESTA CLASSE NUOVA: */
+      .playing-card.selezionata {
+        box-shadow: 0 0 20px #c99c51, inset 0 0 10px #c99c51;
+        border-color: #c99c51;
+        transform: scale(1.05);
+      }
+      .card-back {
+        background: repeating-linear-gradient(45deg, #bd2a2a, #bd2a2a 10px, #8a1f1f 10px, #8a1f1f 20px);
+        border: 2px solid white;
+        cursor: default;
+      }
+      .card-back:hover { transform: none; box-shadow: 2px 4px 10px rgba(0,0,0,0.6); }
+      
+      .cards-hud {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(0,0,0,0.8);
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto 10px auto;
+      }
+
+         
+
+
 
       /* AREA DI GIOCO */
       #game-ui {
@@ -661,11 +837,12 @@
     </style>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="motore-carte.js"></script>
   </head>
   <body>
     <!-- BANNER INSTALLAZIONE APP -->
     <div id="install-banner" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(20,27,41,0.95); padding:15px; border-radius:12px; border:2px solid var(--border-color); text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.9); width:90%; max-width:350px;">
-      <h3 style="margin-bottom:10px; color:#c99c51;">📱 Installa Catanopoli!</h3>
+      <h3 style="margin-bottom:10px; color:#c99c51;">📱 Installa Totality Games!</h3>
       <p style="font-size:0.85rem; margin-bottom:15px; color:white;">Aggiungila alla Home per giocare a schermo intero.</p>
       <button class="btn" id="btn-install" style="font-size:0.85rem; margin-bottom:8px;">INSTALLA APP</button>
       <button class="btn secondary" style="padding:8px; font-size:0.75rem;" onclick="document.getElementById('install-banner').style.display='none'">Più tardi</button>
@@ -712,89 +889,151 @@
       </button>
     </div>
 
-    <!-- MENU SETUP -->
-    <div id="main-menu" class="menu-screen" style="display: none;">
-      <img src="logo-catanopoli.png" alt="Logo" class="menu-logo" />
-
-      <!-- INTESTAZIONE UTENTE LOGGATO -->
-      <div id="user-logged-info" style="display: none; width: 100%; max-width: 300px; text-align: center; margin-bottom: 15px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid #44ff44;">
-        <span style="color: white; font-size: 0.85rem;">Bentornato: <b id="logged-username" style="color: #44ff44;"></b></span><br>
-        <button class="btn secondary" style="margin-top: 8px; padding: 5px; font-size: 0.7rem; border-color: #bd2a2a; color: #bd2a2a;" onclick="eseguiLogout()">🚪 DISCONNETTI</button>
-      </div>
-
-      <div class="input-group">
-        <label>IL TUO NOME IN GIOCO:</label>
-        <input type="text" id="setup-name" value="" placeholder="Inserisci nome" />
-      </div>
-      <div class="input-group">
-        <label>SOLDI INIZIALI:</label>
-        <select id="setup-money">
-          <option value="1500">1500€ (Classico)</option>
-          <option value="2500">2500€ (Ricco)</option>
-          <option value="5000">5000€ (Sceicco)</option>
-        </select>
-      </div>
-
-      <div class="input-group">
-        <label>SCEGLI LA TUA PEDINA:</label>
-        <select id="setup-token" style="font-size: 1.2rem; text-align: center;">
-          <option value="🐘">🐘 Liotru</option>
-          <option value="🍊">🍊 Arancino</option>
-          <option value="🛵">🛵 Motorino</option>
-          <option value="🍧">🍧 Granita</option>
-          <option value="🌋">🌋 Vulcano</option>
-          <option value="⚽">⚽ Pallone</option>
-          <option value="🚓">🚓 Pantera</option>
-        </select>
-      </div>
-
-      <div class="input-group" style="text-align: center; margin-bottom: 20px;">
-        <label style="color:#44ff44;">FOTO PROFILO:</label>
-        
-        <!-- MOTORE SDOPPIATO: Uno forza la fotocamera, l'altro apre la galleria -->
-        <input type="file" id="camera-input" accept="image/*" capture="user" style="display:none;" onchange="elaboraFoto(event)">
-        <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="elaboraFoto(event)">
-        
-        <div style="display: flex; gap: 10px; justify-content: center; width: 100%;">
-          <button class="btn secondary" style="flex: 1; font-size: 0.75rem; border-color: #44ff44; color: #44ff44; padding: 8px;" onclick="document.getElementById('camera-input').click()">
-            📸 SCATTA FOTO
-          </button>
-          <button class="btn secondary" style="flex: 1; font-size: 0.75rem; border-color: #44ff44; color: #44ff44; padding: 8px;" onclick="document.getElementById('gallery-input').click()">
-            🖼️ GALLERIA
-          </button>
-        </div>
-
-        <img id="preview-foto" src="" style="display:none; width: 60px; height: 60px; border-radius: 50%; margin: 10px auto 0; border: 2px solid var(--border-color); object-fit: cover; box-shadow: 0 0 10px rgba(0,0,0,0.8);">
-      </div>
-
-      <button class="btn" style="max-width: 300px; margin-top: 10px" onclick="showSetup('single')">
-        SINGLE PLAYER (VS BOT)
-      </button>
-      <button
-        class="btn"
-        style="max-width: 300px; margin-top: 10px"
-        onclick="showSetup('multi')"
-      >
-        MULTIPLAYER ONLINE
-      </button>
-      <button 
-        class="btn" 
-        style="max-width: 300px; margin-top: 15px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" 
-        onclick="showSetup('afk')"
-      >
-        ☕ SALA AFK (VIP LOUNGE)
-      </button>
-
+    <!-- MENU SETUP (GAME HUB TOTALITY) -->
+    <div id="main-menu" class="menu-screen" style="display: none; justify-content: flex-start; padding-top: 50px; padding-bottom: 50px;">
+      
       <!-- INGRANAGGIO MENU PRINCIPALE -->
       <button onclick="apriImpostazioni()" style="position:absolute; top:15px; right:15px; background:rgba(0,0,0,0.6); border:2px solid var(--border-color); color:white; border-radius:50%; width:45px; height:45px; font-size:1.5rem; cursor:pointer; display:flex; justify-content:center; align-items:center; z-index: 101; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">⚙️</button>
 
-      <!-- SEZIONE SOCIAL E AGENZIA (MENU) -->
-      <div style="margin-top: 25px; text-align: center; font-size: 0.8rem; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); width: 100%; max-width: 320px;">
-        <h4 style="color: #c99c51; margin-bottom: 10px;">Sviluppato da DonLucio 👑</h4>
+      <h1 style="color: #c99c51; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 5px; text-shadow: 0 4px 10px black; text-align: center;">Totality Games</h1>
+      <p style="color: #aaa; font-size: 0.85rem; margin-bottom: 20px; text-align: center;">Sviluppato da DonLucio 👑</p>
+
+      <!-- PROFILO GLOBALE (LA TUA FOTOCAMERA E NOME SONO TORNATI QUI!) -->
+      <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; width: 100%; max-width: 350px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+        
+        <!-- INTESTAZIONE UTENTE LOGGATO -->
+        <div id="user-logged-info" style="display: none; text-align: center; margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+          <span style="color: white; font-size: 0.85rem;">Bentornato: <b id="logged-username" style="color: #44ff44;"></b></span>
+          <button class="btn secondary" style="margin-top: 8px; padding: 5px; font-size: 0.7rem; border-color: #bd2a2a; color: #bd2a2a; width: 100%;" onclick="eseguiLogout()">🚪 DISCONNETTI</button>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 10px; max-width: 100%;">
+          <label style="text-align: center;">IL TUO NOME IN GIOCO:</label>
+          <input type="text" id="setup-name" value="" placeholder="Inserisci nome" style="text-align: center; font-weight: bold; color: #c99c51;" />
+        </div>
+
+        <div class="input-group" style="text-align: center; margin-bottom: 0; max-width: 100%;">
+          <label style="color:#44ff44;">FOTO PROFILO:</label>
+          <!-- MOTORE SDOPPIATO PER FOTOCAMERA/GALLERIA -->
+          <input type="file" id="camera-input" accept="image/*" capture="user" style="display:none;" onchange="elaboraFoto(event)">
+          <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="elaboraFoto(event)">
+          
+          <div style="display: flex; gap: 10px; justify-content: center; width: 100%;">
+            <button class="btn secondary" style="flex: 1; font-size: 0.75rem; border-color: #44ff44; color: #44ff44; padding: 8px;" onclick="document.getElementById('camera-input').click()">
+              📸 SCATTA
+            </button>
+            <button class="btn secondary" style="flex: 1; font-size: 0.75rem; border-color: #44ff44; color: #44ff44; padding: 8px;" onclick="document.getElementById('gallery-input').click()">
+              🖼️ GALLERIA
+            </button>
+          </div>
+          <img id="preview-foto" src="" style="display:none; width: 60px; height: 60px; border-radius: 50%; margin: 10px auto 0; border: 2px solid var(--border-color); object-fit: cover; box-shadow: 0 0 10px rgba(0,0,0,0.8);">
+        </div>
+      </div>
+
+      <div class="game-hub-title">Scegli il Gioco</div>
+
+      <!-- GRIGLIA GIOCHI -->
+      <div class="game-grid">
+        
+        <!-- GIOCO 1: CATANOPOLI (ATTIVO) -->
+        <div class="game-card">
+          <img src="logo-catanopoli.png" alt="Catanopoli" style="max-width: 160px; margin-bottom: 10px; border-radius: 8px;" onerror="this.style.display='none'">
+          <div class="game-title">CATANOPOLI</div>
+          <p class="game-desc">Compra le strade di Catania, costruisci chioschi e manda in bancarotta i tuoi amici!</p>
+          
+          <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px;">
+            <div class="input-group" style="margin-bottom: 0; flex: 1;">
+              <label style="font-size:0.7rem;">SOLDI INIZIALI:</label>
+              <select id="setup-money" style="font-size:0.8rem; padding:6px;">
+                <option value="1500">1500€</option>
+                <option value="2500">2500€</option>
+                <option value="5000">5000€</option>
+              </select>
+            </div>
+            <div class="input-group" style="margin-bottom: 0; flex: 1;">
+              <label style="font-size:0.7rem;">PEDINA:</label>
+              <select id="setup-token" style="font-size: 1rem; padding:6px; text-align: center;">
+                <option value="🐘">🐘 Liotru</option>
+                <option value="🍊">🍊 Arancino</option>
+                <option value="🛵">🛵 Motorino</option>
+                <option value="🍧">🍧 Granita</option>
+                <option value="🌋">🌋 Vulcano</option>
+                <option value="⚽">⚽ Pallone</option>
+                <option value="🚓">🚓 Pantera</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+            <!-- 🔥 Memorizziamo la scelta: Catanopoli -->
+            <button class="btn" style="font-size: 0.85rem; padding: 10px;" onclick="giocoSelezionato='catanopoli'; showSetup('single')">👤 SINGLE PLAYER (BOT)</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #2c4a8a, #4a7acc);" onclick="giocoSelezionato='catanopoli'; showSetup('multi')">🌐 MULTIPLAYER ONLINE</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="showSetup('afk')">☕ SALA AFK (VIP LOUNGE)</button>
+          </div>
+        </div>
+
+        <!-- GIOCO 2: CARTE SICILIANE -->
+        <div class="game-card">
+          <div style="margin-bottom: 5px;">
+             <img src="carte-icon.png" alt="Carte" style="height: 60px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+             <span style="font-size: 3rem; display:none;">🃏</span>
+          </div>
+          <div class="game-title">CARTE SICILIANE</div>
+          <p class="game-desc">Sfida i tuoi amici a Scopa o Briscola sul Tavolo Verde.</p>
+          
+          <!-- Selettore Scopa o Briscola e Punti -->
+          <div style="display: flex; gap: 10px; width: 100%; margin-top: 10px;">
+            <div class="input-group" style="margin-bottom: 0; flex: 1;">
+              <label style="font-size:0.7rem; text-align:center;">GIOCO:</label>
+              <select id="setup-tipo-carte" style="font-size:0.8rem; padding:6px; text-align: center; font-weight: bold;">
+                <option value="scopa">🧹 Scopa</option>
+                <option value="briscola">👊 Briscola</option>
+              </select>
+            </div>
+            <div class="input-group" style="margin-bottom: 0; flex: 1;">
+              <label style="font-size:0.7rem; text-align:center;">PUNTI VITTORIA:</label>
+              <select id="setup-punti-carte" style="font-size:0.8rem; padding:6px; text-align: center; font-weight: bold;">
+                <option value="11">11 Punti</option>
+                <option value="21">21 Punti</option>
+                <option value="51">51 Punti</option>
+                <option value="120">120 Punti (Solo Briscola)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 15px;">
+            <!-- 🔥 Memorizziamo la scelta: Carte. Multi va nella lobby! -->
+            <button class="btn" style="font-size: 0.85rem; padding: 10px;" onclick="giocoSelezionato='carte'; showSetup('cards_single')">👤 SINGLE PLAYER (BOT)</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #2c4a8a, #4a7acc);" onclick="giocoSelezionato='carte'; showSetup('multi')">🌐 MULTIPLAYER ONLINE</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="showSetup('afk')">☕ SALA AFK (VIP LOUNGE)</button>
+          </div>
+        </div>
+
+        <!-- GIOCO 3: TABOO -->
+        <div class="game-card locked">
+          <div style="margin-bottom: 5px;">
+            <img src="taboo-icon.png" alt="Taboo" style="height: 60px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <span style="font-size: 3rem; display:none;">🗣️</span>
+          </div>
+          <div class="game-title">TABOO SICILIANO</div>
+          <p class="game-desc">Fai indovinare la parola alla tua squadra senza usare le parole vietate. In videochat!</p>
+        </div>
+
+        <!-- GIOCO 4: FORZA 4 -->
+        <div class="game-card locked">
+          <div style="font-size: 3rem; margin-bottom: 5px;">🔴</div>
+          <div class="game-title">FORZA 4</div>
+          <p class="game-desc">Allinea 4 gettoni prima del tuo avversario. Rapido e letale.</p>
+        </div>
+      </div>
+
+      <!-- SEZIONE SOCIAL E AGENZIA -->
+      <div style="text-align: center; font-size: 0.8rem; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); width: 100%; max-width: 350px; margin-bottom: 20px;">
+        <h4 style="color: #c99c51; margin-bottom: 10px;">Segui DonLucio 👑</h4>
         <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
           <a href="https://www.tiktok.com/@xxdonemusaxx?_r=1&_t=ZN-98azXsac5zi" target="_blank" class="btn secondary" style="flex: 1; padding: 6px; font-size: 0.75rem; text-decoration: none; color: white;">🎵 TikTok</a>
         </div>
-        <p style="margin-bottom: 8px; line-height: 1.4; color: #ccc;">Se vuoi iniziare a fare live su TikTok e non hai un'agenzia clicca qui:</p>
+        <p style="margin-bottom: 8px; line-height: 1.4; color: #ccc;">Vuoi iniziare a fare live su TikTok? Entra nell'agenzia!</p>
         <a href="https://www.tiktok.com/t/ZMBmQArq8/" target="_blank" class="btn" style="text-decoration: none; padding: 8px; font-size: 0.85rem; background: #2c4a8a; color: white; border-color: #1a2a5a;">🚀 TOTALITY LIVE AGENCY</a>
       </div>
     </div>
@@ -1094,6 +1333,53 @@
           <div style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">Tu</div>
         </div>
       </div>
+    </div>
+
+    <!-- UI CARTE SICILIANE (TAVOLO VERDE) -->
+    <div id="cards-ui">
+      
+      <button class="btn-exit" onclick="esciDaTavoloCarte()">✖</button>
+      <button onclick="apriImpostazioni()" style="position: absolute; top: 10px; right: 55px; z-index: 60; background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 35px; height: 35px; font-size: 1rem; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.8);">⚙️</button>
+
+      <h2 style="color: #c99c51; margin-top: 15px; margin-bottom: 0px; font-size: 1.5rem; text-shadow: 0 2px 4px black; text-align: center; border-bottom: 1px solid #c99c51; padding-bottom: 5px;">TAVOLO VERDE</h2>
+      
+      <!-- AVVERSARIO -->
+      <div style="text-align: center; color: white; font-weight: bold; margin-top: 10px; font-size: 0.85rem;">Avversario: <span id="cards-opponent-name" style="color: #ff4444;">In attesa...</span></div>
+      <div class="opponent-hand" id="opponent-hand">
+        <div class="playing-card card-back"></div>
+        <div class="playing-card card-back"></div>
+        <div class="playing-card card-back"></div>
+      </div>
+
+      <!-- TAVOLO CENTRALE -->
+      <div class="cards-table-center" id="cards-table-center">
+        <!-- Spazi segnaposto vuoti per farti vedere l'effetto -->
+        <div class="card-slot"></div>
+        <div class="card-slot"></div>
+        <div class="card-slot"></div>
+        <div class="card-slot"></div>
+      </div>
+
+      <!-- LA TUA MANO -->
+      <div style="text-align: center; color: var(--border-color); font-weight: bold; margin-bottom: 5px; font-size: 0.85rem;">Le tue carte</div>
+      <div class="player-hand" id="my-hand">
+        <!-- Carte finte di prova, poi le genererà il JS -->
+        <div class="playing-card" style="transform: rotate(-8deg);">A 💰</div>
+        <div class="playing-card" style="z-index: 11; transform: translateY(-5px);">3 🗡️</div>
+        <div class="playing-card" style="transform: rotate(8deg);">Re 🍷</div>
+      </div>
+
+      <!-- HUD E PULSANTI AUDIO/VIDEO -->
+      <div class="cards-hud">
+         <div style="font-size: 0.8rem; font-weight: bold;">Punti: <span style="color:#44ff44;">0</span> - <span style="color:#ff4444;">0</span></div>
+         <div style="font-size: 0.8rem; color: #aaa;">Turno: <span id="cards-turn-indicator" style="color: white; font-weight: bold;">Attesa...</span></div>
+      </div>
+
+      <div id="cards-media-buttons" style="display: flex; gap: 5px; width: 100%; max-width: 400px; margin: 0 auto 20px auto; padding: 0 10px;">
+        <button id="btn-cards-audio" class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.7rem; min-height: 40px; padding: 5px;" onclick="accendiMedia(false)">🎤 AUDIO</button>
+        <button id="btn-cards-video" class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.7rem; min-height: 40px; padding: 5px;" onclick="accendiMedia(true)">📹 VIDEO</button>
+      </div>
+
     </div>
 
 
@@ -2025,18 +2311,42 @@
         }
       }
 
+      // 🔥 Variabile globale per ricordare a cosa stiamo giocando
+      window.giocoSelezionato = "catanopoli"; 
+
       function showSetup(mode) {
         gameMode = mode;
         document.getElementById("main-menu").style.display = "none";
+        
         if (mode === "single") {
           document.getElementById("bot-setup-menu").style.display = "flex";
         } else if (mode === "afk") {
           document.getElementById("afk-setup-menu").style.display = "flex";
+        } else if (mode === "cards_single") {
+          document.getElementById("cards-ui").style.display = "flex";
+          document.getElementById("cards-opponent-name").innerText = "Bot Zio Turi 🤖";
+          
+          let mediaContainer = document.getElementById("cards-media-buttons");
+          if(mediaContainer) mediaContainer.style.display = "none";
+
+          // 🔥 AVVIA IL MOTORE DELLE CARTE IN SINGLE PLAYER
+          let tipoScelto = document.getElementById("setup-tipo-carte").value;
+          if (typeof avviaPartitaCarte === "function") {
+              avviaPartitaCarte(tipoScelto, false); 
+          }
+          
         } else {
+          // Apre la Lobby Multiplayer! (Il server saprà che gioco hai scelto grazie a giocoSelezionato)
           document.getElementById("multi-setup-menu").style.display = "flex";
           mostraCreaStanza();
         }
       }
+
+      window.esciDaTavoloCarte = function() {
+        if (confirm("Vuoi abbandonare il tavolo verde e tornare al Menu?")) {
+           quitGame(); // Chiude tutto in modo pulito e torna alla home!
+        }
+      };
 
       function goBackMenu() {
         document.getElementById("bot-setup-menu").style.display = "none";
