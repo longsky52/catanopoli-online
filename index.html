@@ -2404,6 +2404,9 @@
         if (typeof io !== "undefined") {
           if (!socket) socket = io();
 
+          // 🔥 Rimuoviamo vecchi ascoltatori per evitare che impazzisca
+          socket.off("roomList"); 
+
           socket.on("roomList", function (roomsList) {
             let normalContainer = document.getElementById("rooms-container");
             let afkContainer = document.getElementById("afk-rooms-container");
@@ -2417,7 +2420,9 @@
               } else {
                 normalContainer.innerHTML = normalRooms.map(r => {
                   let iconaLock = r.hasPass ? "🔒" : "";
-                  return "<div class='room-item' onclick='selezionaStanza(\"" + r.name + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + r.name + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
+                  // 🔥 FIX MAGICO: Usiamo r.rawName per il motore, ma r.name per la grafica!
+                  let limite = r.gioco === 'carte' ? '/2' : '/4';
+                  return "<div class='room-item' onclick='selezionaStanza(\"" + r.rawName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + r.name + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + limite + ")</span></div>";
                 }).join("");
               }
             }
@@ -2428,9 +2433,9 @@
               } else {
                 afkContainer.innerHTML = afkRooms.map(r => {
                   let iconaLock = r.hasPass ? "🔒" : "";
-                  // Pulisce il nome per la grafica togliendo la scritta [AFK] 
                   let cleanName = r.name.replace("[AFK] ", "");
-                  return "<div class='afk-room-item' onclick='selezionaStanzaAFK(\"" + r.name + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + cleanName + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
+                  // 🔥 FIX ANCHE PER LE STANZE AFK
+                  return "<div class='afk-room-item' onclick='selezionaStanzaAFK(\"" + r.rawName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + cleanName + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
                 }).join("");
               }
             }
