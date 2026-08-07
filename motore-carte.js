@@ -1,5 +1,5 @@
 // ==========================================
-// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V7 MULTIPLAYER INFALLIBILE
+// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V8 MULTIPLAYER TURNI FIX
 // ==========================================
 
 const semiCarte = ['oro', 'coppe', 'spade', 'bastoni'];
@@ -52,7 +52,6 @@ window.avviaPartitaDaMenuCarte = function() {
 window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
     giocoInCorso = tipoGioco;
     isPartitaMultiplayer = isMulti;
-    chiHaIniziatoMano = "io";
     punteggioGlobaleMio = 0; punteggioGlobaleBot = 0;
 
     let nomeUtente = document.getElementById("setup-name") ? document.getElementById("setup-name").value : "Tu";
@@ -67,17 +66,33 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
         isHost = (datiAggiuntivi.hostId === socket.id);
         difficoltaBot = "UMANO";
         
+        // 🔥 REGOLA D'ORO DEL BAR: Chi fa le carte (Host) NON gioca per primo! Inizia l'ospite!
+        if (isHost) {
+            chiHaIniziatoMano = "avversario";
+        } else {
+            chiHaIniziatoMano = "io";
+        }
+
         let opp = datiAggiuntivi.players.find(p => p.id !== socket.id);
         document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${nomeUtente}</b> vs <b style="color:#ff4444;">${opp ? opp.name : "Avversario"}</b> <span style='font-size:0.7rem; color:#aaa;'>(Online)</span>`;
 
-        // 🌐 SOCKET: Ricezione Dati
+        // 🌐 SOCKET: Ricezione Dati Sincronizzazione Iniziale
         socket.off("riceviCarteSyncInit");
         socket.on("riceviCarteSyncInit", (data) => {
             if (!isHost) {
-                mazzoAttuale = data.mazzoAttuale; mioGiocatore.mano = data.guestMano; avversarioBot.mano = data.hostMano;
-                carteAlCentro = data.carteAlCentro; cartaBriscola = data.cartaBriscola; chiHaIniziatoMano = data.chiHaIniziatoMano;
-                turnoDiChi = data.turnoDiChi === "io" ? "avversario" : "io";
-                faseAnimazione = false; aggiornaInterfaccia(); gestisciTimer();
+                mazzoAttuale = data.mazzoAttuale; 
+                mioGiocatore.mano = data.guestMano; 
+                avversarioBot.mano = data.hostMano;
+                carteAlCentro = data.carteAlCentro; 
+                cartaBriscola = data.cartaBriscola; 
+                
+                // Applica il turno esatto inviato dall'Host
+                chiHaIniziatoMano = data.chiHaIniziatoMano;
+                turnoDiChi = data.turnoDiChi;
+                
+                faseAnimazione = false; 
+                aggiornaInterfaccia(); 
+                gestisciTimer();
             }
         });
 
@@ -86,6 +101,7 @@ window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
         socket.off("playerLeft"); socket.on("playerLeft", (playerName) => { alert(`L'avversario ${playerName} è fuggito! Hai vinto.`); window.esciDaTavoloCarte(); });
 
     } else {
+        chiHaIniziatoMano = "io"; // In single player inizi sempre tu
         difficoltaBot = datiAggiuntivi.diff || "medio";
         targetPuntiVittoria = datiAggiuntivi.target || 11;
         document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${nomeUtente}</b> vs Bot Zio Turi 🤖 <span style='font-size:0.7rem; color:#aaa;'>(${difficoltaBot.toUpperCase()})</span>`;
@@ -103,15 +119,35 @@ async function iniziaNuovaSmazzata() {
     mioGiocatore.mano = []; mioGiocatore.prese = []; mioGiocatore.punti = 0; mioGiocatore.scope = 0;
     avversarioBot.mano = []; avversarioBot.prese = []; avversarioBot.punti = 0; avversarioBot.scope = 0;
     carteAlCentro = []; carteGiocateOra = []; carteSelezionateTavolo = [];
-    cartaBriscola = null; ultimoAPrendere = "nessuno"; turnoDiChi = chiHaIniziatoMano;
+    cartaBriscola = null; ultimoAPrendere = "nessuno"; 
+    
+    // Imposta il turno corretto calcolato precedentemente
+    turnoDiChi = chiHaIniziatoMano; 
 
     if (isPartitaMultiplayer) {
         if (isHost) {
             await distribuisciCarteAnimazione();
-            // 🔥 SPARA LE CARTE 4 VOLTE DI FILA PER ESSERE SICURO CHE ARRIVINO ALL'OSPITE CHE STA CARICANDO!
+            
+            // 🔥 SBLOCCA L'INTERFACCIA DELL'HOST
+            faseAnimazione = false;
+            aggiornaInterfaccia();
+
+            // Calcola come deve apparire il turno sul telefono dell'Ospite
+            let turnoGuest = (turnoDiChi === "io") ? "avversario" : "io";
+
+            // SPARA LE CARTE 4 VOLTE DI FILA AL GUEST
             for(let syncs = 0; syncs < 4; syncs++) {
                 setTimeout(() => {
-                    socket.emit("carteSyncInit", { room: roomMulti, mazzoAttuale: mazzoAttuale, hostMano: mioGiocatore.mano, guestMano: avversarioBot.mano, carteAlCentro: carteAlCentro, cartaBriscola: cartaBriscola, chiHaIniziatoMano: chiHaIniziatoMano, turnoDiChi: turnoDiChi });
+                    socket.emit("carteSyncInit", { 
+                        room: roomMulti, 
+                        mazzoAttuale: mazzoAttuale, 
+                        hostMano: mioGiocatore.mano, 
+                        guestMano: avversarioBot.mano, 
+                        carteAlCentro: carteAlCentro, 
+                        cartaBriscola: cartaBriscola, 
+                        chiHaIniziatoMano: turnoGuest, 
+                        turnoDiChi: turnoGuest 
+                    });
                 }, 500 + (syncs * 800));
             }
             gestisciTimer();
@@ -185,7 +221,9 @@ function aggiornaInterfaccia() {
                 ${cartaBriscola ? `<div style="position: absolute; left: -10px; top: 15px; width: 75px; height: 105px;"><img src="${cartaBriscola.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius:6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); transform: rotate(90deg) scale(0.9);"><div style="display:none; width: 100%; height: 100%; background: white; color: black; border: 2px solid #000; border-radius: 6px; transform: rotate(90deg) scale(0.9); flex-direction:column; align-items:center; justify-content:center; font-weight:bold;">${cartaBriscola.valore}</div></div>` : ""}
                 ${mazzoAttuale.length > 0 ? `<div class="playing-card card-back" style="position: absolute; left: 35px; top: 0; z-index: 5; box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div>` : ""}</div>`;
     } else if (giocoInCorso === "scopa" && mazzoAttuale.length > 0) {
-        let posizioneY = (chiHaIniziatoMano === "io") ? "top: -60px;" : "bottom: -60px;";
+        // MAZZIERE GRAFICO
+        // Se il turno iniziale spettava a me, il mazzo ce l'ho in basso. Altrimenti in alto!
+        let posizioneY = (chiHaIniziatoMano === "io") ? "bottom: -60px;" : "top: -60px;";
         mazzoHTML = `<div style="position: absolute; right: 20px; ${posizioneY} transform: rotate(-5deg); z-index: 10; transition: all 0.5s ease;"><div class="playing-card card-back" style="box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div></div>`;
     }
 
@@ -208,7 +246,7 @@ function aggiornaInterfaccia() {
     if (giocoInCorso === "briscola") { document.querySelector(".cards-hud span:first-child").innerHTML = `Round: Tu <b>${pMioDisp}</b> | Avv <b>${pBotDisp}</b> <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; } 
     else { document.querySelector(".cards-hud span:first-child").innerHTML = `Mano: <b>${mioGiocatore.prese.length}</b> carte (Scope: ${mioGiocatore.scope}) <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; }
     
-    // Non scriviamo "Turno Tuo" se siamo guest ed è appena iniziato!
+    // Aggiornamento corretto indicatore del turno
     if (faseAnimazione || (!isHost && isPartitaMultiplayer && mazzoAttuale.length === 0)) return;
     
     let timerTesto = (turnoDiChi === "io") ? ` <span style='color:gold; font-size:0.9em;'>(⏱️ ${secondiRimasti}s)</span>` : "";
@@ -414,11 +452,12 @@ function chiudiManoEContaPunti() {
             let esito = punteggioGlobaleMio > punteggioGlobaleBot ? "🏆 HAI VINTO LA PARTITA!" : (punteggioGlobaleMio === punteggioGlobaleBot ? "Pareggio!" : "☠️ Hai perso la partita.");
             alert("🔥 PARTITA CONCLUSA! 🔥\n\n" + esito); window.esciDaTavoloCarte();
         } else {
+            // SI CAMBIA IL MAZZIERE A FINE MANO!
             chiHaIniziatoMano = (chiHaIniziatoMano === "io") ? "avversario" : "io";
             
             if (isPartitaMultiplayer) {
                 if (isHost) {
-                    iniziaNuovaSmazzata(); // Solo l'host decide quando riavviare la mano
+                    iniziaNuovaSmazzata(); 
                 } else {
                     document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>";
                     mazzoAttuale = []; aggiornaInterfaccia(); 
