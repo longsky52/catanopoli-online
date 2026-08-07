@@ -1148,7 +1148,36 @@
           <label>PASSWORD (FACOLTATIVA):</label>
           <input type="password" id="create-room-pass" placeholder="Lascia vuoto se libera" />
         </div>
-        <div class="input-group" style="margin-top: 10px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+
+        <!-- 🔥 IMPOSTAZIONI AGGIUNTIVE MULTIPLAYER CARTE -->
+        <div id="multi-cards-options" style="display:none; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-top:10px; margin-bottom: 10px;">
+            <label style="color: #c99c51; font-weight: bold; font-size: 0.8rem; display:block; margin-bottom: 5px;">REGOLE TAVOLO VERDE:</label>
+            <div style="display:flex; gap:10px;">
+                <select id="multi-cards-tipo" onchange="aggiornaMultiCarte()" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
+                    <option value="scopa">🧹 Scopa</option>
+                    <option value="briscola">👊 Briscola</option>
+                </select>
+                <select id="multi-cards-target" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
+                    <option value="11">11 Punti</option>
+                    <option value="21">21 Punti</option>
+                    <option value="51">51 Punti</option>
+                </select>
+            </div>
+            <script>
+                function aggiornaMultiCarte() {
+                    let t = document.getElementById("multi-cards-tipo").value;
+                    let target = document.getElementById("multi-cards-target");
+                    if(t === "briscola") {
+                        target.innerHTML = "<option value='120'>120 Punti</option>";
+                    } else {
+                        target.innerHTML = "<option value='11'>11 Punti</option><option value='21'>21 Punti</option><option value='51'>51 Punti</option>";
+                    }
+                }
+            </script>
+        </div>
+
+        <!-- OPZIONI DI CATANOPOLI (Nascoste se giochi a carte) -->
+        <div class="input-group" id="multi-catanopoli-options" style="margin-top: 10px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: white; margin: 0; font-size: 0.8rem;">
             <input type="checkbox" id="is-afk-room" style="width: 20px; height: 20px; accent-color: #c99c51;">
             <b>Crea come SALA AFK (Video e Voce, Niente Tabellone)</b>
@@ -2360,6 +2389,12 @@
           if(typeof aggiornaOpzioniCarte === 'function') aggiornaOpzioniCarte();
         } else {
           document.getElementById("multi-setup-menu").style.display = "flex";
+          // 🔥 MOSTRA LE OPZIONI DELLE CARTE SOLO SE HAI SCELTO QUEL GIOCO
+          let optCards = document.getElementById("multi-cards-options");
+          let optCatanopoli = document.getElementById("multi-catanopoli-options");
+          if(optCards) optCards.style.display = (window.giocoSelezionato === "carte") ? "block" : "none";
+          if(optCatanopoli) optCatanopoli.style.display = (window.giocoSelezionato === "catanopoli") ? "block" : "none";
+          
           mostraCreaStanza();
         }
       }
@@ -2420,7 +2455,6 @@
               } else {
                 normalContainer.innerHTML = normalRooms.map(r => {
                   let iconaLock = r.hasPass ? "🔒" : "";
-                  // 🔥 FIX MAGICO: Usiamo r.rawName per il motore, ma r.name per la grafica!
                   let limite = r.gioco === 'carte' ? '/2' : '/4';
                   return "<div class='room-item' onclick='selezionaStanza(\"" + r.rawName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + r.name + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + limite + ")</span></div>";
                 }).join("");
@@ -2434,7 +2468,6 @@
                 afkContainer.innerHTML = afkRooms.map(r => {
                   let iconaLock = r.hasPass ? "🔒" : "";
                   let cleanName = r.name.replace("[AFK] ", "");
-                  // 🔥 FIX ANCHE PER LE STANZE AFK
                   return "<div class='afk-room-item' onclick='selezionaStanzaAFK(\"" + r.rawName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + cleanName + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
                 }).join("");
               }
@@ -2507,9 +2540,12 @@
         if (isJoin) {
           socket.emit("joinSpecificRoom", { roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money });
         } else {
-          // L'Host crea e manda al server anche i dati del gioco Carte!
-          let tCarte = document.getElementById("cards-setup-tipo") ? document.getElementById("cards-setup-tipo").value : "scopa";
-          let tPunti = document.getElementById("cards-setup-target") ? parseInt(document.getElementById("cards-setup-target").value) : 11;
+          // 🔥 LEGGE DAI NUOVI SELETTORI MULTIPLAYER DELLE CARTE!
+          let mCarteTipo = document.getElementById("multi-cards-tipo");
+          let mCartePunti = document.getElementById("multi-cards-target");
+          
+          let tCarte = mCarteTipo ? mCarteTipo.value : "scopa";
+          let tPunti = mCartePunti ? parseInt(mCartePunti.value) : 11;
           
           socket.emit("createRoom", { 
               roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money, 
