@@ -1,34 +1,37 @@
 // ==========================================
-// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V8 MULTIPLAYER TURNI FIX
+// MOTORE CARTE SICILIANE (TOTALITY GAMES) - V10 SINCRONIZZAZIONE DEFINITIVA
 // ==========================================
 
 const semiCarte = ['oro', 'coppe', 'spade', 'bastoni'];
 const valoriCarte = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; 
-
 const puntiBriscola = { 1: 11, 3: 10, 10: 4, 9: 3, 8: 2, 7: 0, 6: 0, 5: 0, 4: 0, 2: 0 };
 const forzaBriscola = { 1: 12, 3: 11, 10: 10, 9: 9, 8: 8, 7: 7, 6: 6, 5: 5, 4: 4, 2: 2 };
 const valoriPrimiera = { 7: 21, 6: 18, 1: 16, 5: 15, 4: 14, 3: 13, 2: 12, 8: 10, 9: 10, 10: 10 };
 
-const iconeSemi = { 'oro': '💰', 'coppe': '🍷', 'spade': '🗡️', 'bastoni': '🪵' };
-const coloriSemi = { 'oro': '#d4af37', 'coppe': '#bd2a2a', 'spade': '#2c4a8a', 'bastoni': '#3b7a3b' };
-
-let targetPuntiVittoria = 120; let punteggioGlobaleMio = 0; let punteggioGlobaleBot = 0;
-let mazzoAttuale = []; let mioGiocatore = { mano: [], prese: [], punti: 0, scope: 0 }; let avversarioBot = { mano: [], prese: [], punti: 0, scope: 0 };
-let carteAlCentro = []; let carteGiocateOra = []; let cartaBriscola = null; let carteSelezionateTavolo = [];
-let giocoInCorso = ""; let difficoltaBot = "medio"; let turnoDiChi = "io"; let faseAnimazione = false;
-let chiHaIniziatoMano = "io"; let ultimoAPrendere = "nessuno";
-
-// Variabili Multiplayer e Timer
+let targetPuntiVittoria = 120; 
+let giocoInCorso = ""; let difficoltaBot = "medio"; let faseAnimazione = false;
 let isPartitaMultiplayer = false; let isHost = false; let roomMulti = "";
-let timerTurno = null; let secondiRimasti = 30;
 
+// ARRAY GIOCATORI: 0=Basso(Io), 1=Destra(Avv1), 2=Alto(Socio), 3=Sinistra(Avv2)
+let numGiocatori = 2; 
+let giocatori = []; 
+let mazzoAttuale = []; 
+let carteAlCentro = []; 
+let carteGiocateOra = []; 
+let cartaBriscola = null; 
+let carteSelezionateTavolo = [];
+let indexTurnoAttuale = 0; 
+let indexMazziere = 1; 
+let ultimoAPrendereTeam = -1;
+
+let timerTurno = null; let secondiRimasti = 30;
 const attesa = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function generaMazzo() {
     let nuovoMazzo = [];
     for (let s of semiCarte) {
         for (let v of valoriCarte) {
-            nuovoMazzo.push({ valore: v, seme: s, nome: v + " di " + s, imgStr: "carte/" + v + "_" + s + ".png", valoreScopa: (v === 'A' ? 1 : v === 'F' ? 8 : v === 'C' ? 9 : v === 'Re' ? 10 : parseInt(v)) });
+            nuovoMazzo.push({ valore: v, seme: s, imgStr: `carte/${v}_${s}.png`, valoreScopa: (v==='A'?1: v==='F'?8: v==='C'?9: v==='Re'?10: parseInt(v)) });
         }
     }
     return nuovoMazzo;
@@ -40,131 +43,142 @@ function mescolaMazzo(mazzo) {
 
 window.avviaPartitaDaMenuCarte = function() {
     let tipo = document.getElementById("cards-setup-tipo").value;
-    let diff = document.getElementById("cards-setup-diff").value;
+    let nP = document.getElementById("cards-setup-players") ? parseInt(document.getElementById("cards-setup-players").value) : 2;
     let target = (tipo === "briscola") ? 120 : (parseInt(document.getElementById("cards-setup-target").value) || 11);
-
+    
     document.getElementById("cards-setup-menu").style.display = "none";
     document.getElementById("cards-ui").style.display = "flex";
-    avviaPartitaCarte(tipo, false, { diff: diff, target: target }); 
+    avviaPartitaCarte(tipo, false, { numPlayers: nP, target: target }); 
 }
 
-// 🌐 ENTRY POINT UNIVERSALE (Chiama sia il Single che il Multi)
+// 🌐 ENTRY POINT UNIVERSALE
 window.avviaPartitaCarte = function(tipoGioco, isMulti, datiAggiuntivi) {
     giocoInCorso = tipoGioco;
     isPartitaMultiplayer = isMulti;
-    punteggioGlobaleMio = 0; punteggioGlobaleBot = 0;
+    numGiocatori = datiAggiuntivi.numPlayers || (isMulti && datiAggiuntivi.players ? datiAggiuntivi.players.length : 2);
+    targetPuntiVittoria = datiAggiuntivi.targetCarte || datiAggiuntivi.target || 11;
 
     let nomeUtente = document.getElementById("setup-name") ? document.getElementById("setup-name").value : "Tu";
     if(!nomeUtente) nomeUtente = "Tu";
     let prevImg = document.getElementById("preview-foto");
-    let fotoSrc = (prevImg && prevImg.style.display !== "none" && prevImg.src) ? prevImg.src : (typeof window.myPhotoBase64 !== 'undefined' ? window.myPhotoBase64 : "");
-    let fotoTag = fotoSrc ? `<img src="${fotoSrc}" style="width:28px; height:28px; border-radius:50%; vertical-align:middle; margin-right:5px; border:2px solid #c99c51; object-fit:cover;">` : `🃏`;
+    let miaFoto = (prevImg && prevImg.style.display !== "none" && prevImg.src) ? prevImg.src : (typeof window.myPhotoBase64 !== 'undefined' ? window.myPhotoBase64 : null);
 
-    if (isMulti) {
-        roomMulti = typeof myRoom !== 'undefined' ? myRoom : "StanzaSconosciuta";
-        targetPuntiVittoria = datiAggiuntivi.targetCarte || 11;
-        isHost = (datiAggiuntivi.hostId === socket.id);
-        difficoltaBot = "UMANO";
-        
-        // 🔥 REGOLA D'ORO DEL BAR: Chi fa le carte (Host) NON gioca per primo! Inizia l'ospite!
-        if (isHost) {
-            chiHaIniziatoMano = "avversario";
+    giocatori = [];
+    if (!isMulti) {
+        // SINGLE PLAYER
+        indexMazziere = numGiocatori === 2 ? 1 : 3; 
+        indexTurnoAttuale = 0; 
+        giocatori.push({ id: "io", name: nomeUtente, photo: miaFoto, mano: [], prese: [], punti: 0, scope: 0, isBot: false, team: 0 });
+        if (numGiocatori === 2) {
+            giocatori.push({ id: "bot1", name: "Zio Turi 🤖", photo: null, mano: [], prese: [], punti: 0, scope: 0, isBot: true, team: 1 });
         } else {
-            chiHaIniziatoMano = "io";
+            giocatori.push({ id: "bot1", name: "Alfio 🤖", photo: null, mano: [], prese: [], punti: 0, scope: 0, isBot: true, team: 1 }); 
+            giocatori.push({ id: "bot2", name: "Socio Cettina 🤖", photo: null, mano: [], prese: [], punti: 0, scope: 0, isBot: true, team: 0 }); 
+            giocatori.push({ id: "bot3", name: "Zio Turi 🤖", photo: null, mano: [], prese: [], punti: 0, scope: 0, isBot: true, team: 1 }); 
         }
+    } else {
+        // MULTIPLAYER
+        roomMulti = typeof myRoom !== 'undefined' ? myRoom : "Stanza";
+        isHost = (datiAggiuntivi.hostId === socket.id);
+        
+        let myDataIndex = datiAggiuntivi.players.findIndex(p => p.id === socket.id);
+        for(let i=0; i<numGiocatori; i++) {
+            let pData = datiAggiuntivi.players[(myDataIndex + i) % numGiocatori];
+            giocatori.push({ id: pData.id, name: pData.name, photo: pData.photo, mano: [], prese: [], punti: 0, scope: 0, isBot: false, team: i % 2 });
+        }
+        
+        if (isHost) { 
+            indexMazziere = 0; 
+            indexTurnoAttuale = 1; // L'Host fa le carte, l'Ospite gioca!
+        } 
 
-        let opp = datiAggiuntivi.players.find(p => p.id !== socket.id);
-        document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${nomeUtente}</b> vs <b style="color:#ff4444;">${opp ? opp.name : "Avversario"}</b> <span style='font-size:0.7rem; color:#aaa;'>(Online)</span>`;
-
-        // 🌐 SOCKET: Ricezione Dati Sincronizzazione Iniziale
         socket.off("riceviCarteSyncInit");
         socket.on("riceviCarteSyncInit", (data) => {
             if (!isHost) {
                 mazzoAttuale = data.mazzoAttuale; 
-                mioGiocatore.mano = data.guestMano; 
-                avversarioBot.mano = data.hostMano;
                 carteAlCentro = data.carteAlCentro; 
-                cartaBriscola = data.cartaBriscola; 
+                cartaBriscola = data.cartaBriscola;
                 
-                // Applica il turno esatto inviato dall'Host
-                chiHaIniziatoMano = data.chiHaIniziatoMano;
-                turnoDiChi = data.turnoDiChi;
+                // 🔥 LA MAGIA: Convertiamo gli ID ricevuti nell'indice corretto per QUESTO telefono!
+                indexMazziere = giocatori.findIndex(g => g.id === data.mazziereId);
+                indexTurnoAttuale = giocatori.findIndex(g => g.id === data.turnoDiId);
+                
+                for(let i=0; i<numGiocatori; i++) {
+                    let realIdx = data.giocatoriData.findIndex(p => p.id === giocatori[i].id);
+                    if(realIdx !== -1) giocatori[i].mano = data.giocatoriData[realIdx].mano;
+                }
                 
                 faseAnimazione = false; 
-                aggiornaInterfaccia(); 
-                gestisciTimer();
+                aggiornaInterfaccia();
+                if (indexTurnoAttuale === 0) gestisciTimer(); // Sblocca il timer per chi deve giocare
             }
         });
 
         socket.off("riceviCarteAzione");
-        socket.on("riceviCarteAzione", (data) => { eseguiAzioneAvversarioRete(data.indexMano, data.indiciTavolo); });
-        socket.off("playerLeft"); socket.on("playerLeft", (playerName) => { alert(`L'avversario ${playerName} è fuggito! Hai vinto.`); window.esciDaTavoloCarte(); });
+        socket.on("riceviCarteAzione", (data) => {
+            let idxG = giocatori.findIndex(g => g.id === data.giocatoreId);
+            if(idxG !== -1) eseguiAzioneRete(idxG, data.indexMano, data.indiciTavolo);
+        });
 
-    } else {
-        chiHaIniziatoMano = "io"; // In single player inizi sempre tu
-        difficoltaBot = datiAggiuntivi.diff || "medio";
-        targetPuntiVittoria = datiAggiuntivi.target || 11;
-        document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${nomeUtente}</b> vs Bot Zio Turi 🤖 <span style='font-size:0.7rem; color:#aaa;'>(${difficoltaBot.toUpperCase()})</span>`;
+        socket.off("playerLeft"); socket.on("playerLeft", (playerName) => { alert(`L'avversario ${playerName} è fuggito! Hai vinto.`); window.esciDaTavoloCarte(); });
     }
 
-    let mediaContainer = document.getElementById("cards-media-buttons"); if(mediaContainer) mediaContainer.style.display = "none";
-    let btnAud = document.getElementById("btn-cards-audio"); if(btnAud) btnAud.style.display = "none";
-    let btnVid = document.getElementById("btn-cards-video"); if(btnVid) btnVid.style.display = "none";
+    let pToken = document.getElementById("setup-token") ? document.getElementById("setup-token").value : "👤";
+    let fotoTag = miaFoto ? `<img src="${miaFoto}" style="width:28px; height:28px; border-radius:50%; vertical-align:middle; margin-right:5px; border:2px solid #c99c51; object-fit:cover;">` : `<span style="font-size:1.5rem; vertical-align:middle; margin-right:5px;">${pToken}</span>`;
+    document.getElementById("cards-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${giocatori[0].name}</b> vs <b style="color:#ff4444;">Squadra Avversaria</b>`;
 
+    let mediaContainer = document.getElementById("cards-media-buttons"); if(mediaContainer) mediaContainer.style.display = "none";
     iniziaNuovaSmazzata();
 }
 
 async function iniziaNuovaSmazzata() {
     fermaTimer(); faseAnimazione = true;
-    mioGiocatore.mano = []; mioGiocatore.prese = []; mioGiocatore.punti = 0; mioGiocatore.scope = 0;
-    avversarioBot.mano = []; avversarioBot.prese = []; avversarioBot.punti = 0; avversarioBot.scope = 0;
-    carteAlCentro = []; carteGiocateOra = []; carteSelezionateTavolo = [];
-    cartaBriscola = null; ultimoAPrendere = "nessuno"; 
-    
-    // Imposta il turno corretto calcolato precedentemente
-    turnoDiChi = chiHaIniziatoMano; 
+    for(let i=0; i<numGiocatori; i++) { giocatori[i].mano = []; giocatori[i].prese = []; giocatori[i].scope = 0; }
+    carteAlCentro = []; carteGiocateOra = []; carteSelezionateTavolo = []; cartaBriscola = null; ultimoAPrendereTeam = -1;
 
     if (isPartitaMultiplayer) {
         if (isHost) {
             await distribuisciCarteAnimazione();
-            
-            // 🔥 SBLOCCA L'INTERFACCIA DELL'HOST
-            faseAnimazione = false;
+            faseAnimazione = false; 
             aggiornaInterfaccia();
-
-            // Calcola come deve apparire il turno sul telefono dell'Ospite
-            let turnoGuest = (turnoDiChi === "io") ? "avversario" : "io";
-
-            // SPARA LE CARTE 4 VOLTE DI FILA AL GUEST
-            for(let syncs = 0; syncs < 4; syncs++) {
-                setTimeout(() => {
+            
+            // L'host spara 3 volte i dati per essere sicuro che l'ospite li prenda!
+            for(let syncs = 0; syncs < 3; syncs++) {
+                setTimeout(() => { 
                     socket.emit("carteSyncInit", { 
                         room: roomMulti, 
                         mazzoAttuale: mazzoAttuale, 
-                        hostMano: mioGiocatore.mano, 
-                        guestMano: avversarioBot.mano, 
+                        giocatoriData: giocatori.map(g => ({id: g.id, mano: g.mano})), 
                         carteAlCentro: carteAlCentro, 
                         cartaBriscola: cartaBriscola, 
-                        chiHaIniziatoMano: turnoGuest, 
-                        turnoDiChi: turnoGuest 
-                    });
+                        mazziereId: giocatori[indexMazziere].id, 
+                        turnoDiId: giocatori[indexTurnoAttuale].id 
+                    }); 
                 }, 500 + (syncs * 800));
             }
-            gestisciTimer();
+            if(indexTurnoAttuale === 0) gestisciTimer();
         } else {
-            document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>";
+            document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attesa Distribuzione...</span>";
             mazzoAttuale = []; aggiornaInterfaccia(); 
         }
     } else {
         await distribuisciCarteAnimazione();
-        faseAnimazione = false; gestisciTimer();
-        if(turnoDiChi === "avversario") setTimeout(turnoDelBot, 1500);
+        faseAnimazione = false;
+        if(indexTurnoAttuale === 0) gestisciTimer();
+        else setTimeout(() => turnoDelBot(indexTurnoAttuale), 1500);
     }
 }
 
 async function distribuisciCarteAnimazione() {
     mazzoAttuale = mescolaMazzo(generaMazzo()); aggiornaInterfaccia();
-    for (let i = 0; i < 3; i++) { await attesa(300); mioGiocatore.mano.push(mazzoAttuale.pop()); avversarioBot.mano.push(mazzoAttuale.pop()); aggiornaInterfaccia(); }
+    for (let j = 0; j < 3; j++) {
+        for (let i = 0; i < numGiocatori; i++) {
+            await attesa(200);
+            let targetIdx = (indexMazziere + 1 + i) % numGiocatori; 
+            giocatori[targetIdx].mano.push(mazzoAttuale.pop());
+            aggiornaInterfaccia();
+        }
+    }
     if (giocoInCorso === "scopa") {
         for (let i = 0; i < 4; i++) { await attesa(300); carteAlCentro.push(mazzoAttuale.pop()); aggiornaInterfaccia(); }
     } else if (giocoInCorso === "briscola") {
@@ -174,7 +188,7 @@ async function distribuisciCarteAnimazione() {
 
 function gestisciTimer() {
     clearInterval(timerTurno);
-    if (turnoDiChi === "io" && !faseAnimazione) {
+    if (indexTurnoAttuale === 0 && !faseAnimazione) {
         secondiRimasti = 30; aggiornaInterfaccia();
         timerTurno = setInterval(() => {
             secondiRimasti--; aggiornaInterfaccia();
@@ -185,16 +199,16 @@ function gestisciTimer() {
 function fermaTimer() { clearInterval(timerTurno); }
 
 function giocaCartaPerScadenzaTempo() {
-    if(mioGiocatore.mano.length === 0) return;
-    let idx = Math.floor(Math.random() * mioGiocatore.mano.length);
+    if(giocatori[0].mano.length === 0) return;
+    let idx = Math.floor(Math.random() * giocatori[0].mano.length);
     if (giocoInCorso === "scopa") {
-        let prendibile = carteAlCentro.findIndex(c => c.valoreScopa === mioGiocatore.mano[idx].valoreScopa);
-        if(prendibile !== -1) completaGiocataScopa(idx, [prendibile]); else completaGiocataScopa(idx, []);
-    } else { completaGiocataBriscola(idx); }
+        let prendibile = carteAlCentro.findIndex(c => c.valoreScopa === giocatori[0].mano[idx].valoreScopa);
+        if(prendibile !== -1) completaGiocataScopa(0, idx, [prendibile]); else completaGiocataScopa(0, idx, []);
+    } else { completaGiocataBriscola(0, idx); }
 }
 
 window.selezionaCartaTavolo = function(index) {
-    if (giocoInCorso !== "scopa" || turnoDiChi !== "io" || faseAnimazione) return;
+    if (giocoInCorso !== "scopa" || indexTurnoAttuale !== 0 || faseAnimazione) return;
     let pos = carteSelezionateTavolo.indexOf(index);
     if (pos > -1) carteSelezionateTavolo.splice(pos, 1); else carteSelezionateTavolo.push(index);
     if(typeof window.suonaEffetto === 'function') { try { window.suonaEffetto('carta'); } catch(e){} }
@@ -202,61 +216,89 @@ window.selezionaCartaTavolo = function(index) {
 }
 
 function aggiornaInterfaccia() {
-    let divMiaMano = document.getElementById("my-hand"); let divAvversario = document.getElementById("opponent-hand"); let divCentro = document.getElementById("cards-table-center");
+    let contenitoreUI = document.getElementById("cards-ui");
+    let divMiaMano = document.getElementById("my-hand"); let divAvversarioTop = document.getElementById("opponent-hand"); let divCentro = document.getElementById("cards-table-center");
     divCentro.style.position = "relative";
     let vecchi = document.querySelectorAll("#mazzo-laterale"); vecchi.forEach(e => e.remove());
 
-    divMiaMano.innerHTML = mioGiocatore.mano.map((carta, index) => {
-        let rot = (index - Math.floor(mioGiocatore.mano.length/2)) * 8; let yOff = (index === Math.floor(mioGiocatore.mano.length/2)) ? -10 : 0;
+    divMiaMano.innerHTML = giocatori[0].mano.map((carta, index) => {
+        let rot = (index - Math.floor(giocatori[0].mano.length/2)) * 8; let yOff = (index === Math.floor(giocatori[0].mano.length/2)) ? -10 : 0;
         return `<div class="playing-card" onclick="tentaGiocataMia(${index})" style="transform: rotate(${rot}deg) translateY(${yOff}px); z-index: ${10 + index}; padding:0; background:none; border:none; transition: all 0.3s ease;">
-                <img src="${carta.imgStr}" onerror="this.onerror=null; this.src='carte/fallback.png'; this.parentElement.innerHTML='<div class=\\'playing-card\\' style=\\'background:white; color:black; border: 2px solid #000;\\'>${carta.valore}<br>${carta.seme[0].toUpperCase()}</div>';" style="width:100%; height:100%; border-radius:8px; box-shadow: 2px 4px 10px rgba(0,0,0,0.6); pointer-events:none;"></div>`;
+                <img src="${carta.imgStr}" onerror="this.onerror=null; this.src='carte/fallback.png'; this.parentElement.innerHTML='<div class=\\'playing-card\\' style=\\'background:white; color:black; border: 2px solid #000;\\'>${carta.valore}</div>';" style="width:100%; height:100%; border-radius:8px; box-shadow: 2px 4px 10px rgba(0,0,0,0.6); pointer-events:none;"></div>`;
     }).join("");
 
-    divAvversario.innerHTML = avversarioBot.mano.map(() => `<div class="playing-card card-back" style="transition: all 0.3s ease;"></div>`).join("");
+    let indexAlto = numGiocatori === 2 ? 1 : 2;
+    divAvversarioTop.innerHTML = giocatori[indexAlto].mano.map(() => `<div class="playing-card card-back" style="transition: all 0.3s ease;"></div>`).join("");
+
+    if (numGiocatori === 4) {
+        let leftHand = document.getElementById("left-hand-container");
+        if (!leftHand) { leftHand = document.createElement("div"); leftHand.id = "left-hand-container"; leftHand.style = "position:absolute; left:-20px; top:50%; transform:translateY(-50%) rotate(90deg); display:flex; gap:5px; pointer-events:none;"; contenitoreUI.appendChild(leftHand); }
+        leftHand.innerHTML = giocatori[3].mano.map(()=> `<div class="playing-card card-back" style="width:50px; height:75px; box-shadow:-2px 2px 5px black;"></div>`).join("");
+
+        let rightHand = document.getElementById("right-hand-container");
+        if (!rightHand) { rightHand = document.createElement("div"); rightHand.id = "right-hand-container"; rightHand.style = "position:absolute; right:-20px; top:50%; transform:translateY(-50%) rotate(-90deg); display:flex; gap:5px; pointer-events:none;"; contenitoreUI.appendChild(rightHand); }
+        rightHand.innerHTML = giocatori[1].mano.map(()=> `<div class="playing-card card-back" style="width:50px; height:75px; box-shadow:2px -2px 5px black;"></div>`).join("");
+    } else {
+        let lh = document.getElementById("left-hand-container"); if(lh) lh.remove();
+        let rh = document.getElementById("right-hand-container"); if(rh) rh.remove();
+    }
 
     let mazzoHTML = "";
     if (giocoInCorso === "briscola" && (cartaBriscola || mazzoAttuale.length > 0)) {
         let opacita = mazzoAttuale.length === 0 ? "0.6" : "1";
         mazzoHTML = `<div style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 120px; height: 110px; opacity: ${opacita}; z-index: 10;">
-                ${cartaBriscola ? `<div style="position: absolute; left: -10px; top: 15px; width: 75px; height: 105px;"><img src="${cartaBriscola.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius:6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); transform: rotate(90deg) scale(0.9);"><div style="display:none; width: 100%; height: 100%; background: white; color: black; border: 2px solid #000; border-radius: 6px; transform: rotate(90deg) scale(0.9); flex-direction:column; align-items:center; justify-content:center; font-weight:bold;">${cartaBriscola.valore}</div></div>` : ""}
+                ${cartaBriscola ? `<div style="position: absolute; left: -10px; top: 15px; width: 75px; height: 105px;"><img src="${cartaBriscola.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 100%; height: 100%; border-radius:6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); transform: rotate(90deg) scale(0.9);"></div>` : ""}
                 ${mazzoAttuale.length > 0 ? `<div class="playing-card card-back" style="position: absolute; left: 35px; top: 0; z-index: 5; box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div>` : ""}</div>`;
     } else if (giocoInCorso === "scopa" && mazzoAttuale.length > 0) {
-        // MAZZIERE GRAFICO
-        // Se il turno iniziale spettava a me, il mazzo ce l'ho in basso. Altrimenti in alto!
-        let posizioneY = (chiHaIniziatoMano === "io") ? "bottom: -60px;" : "top: -60px;";
-        mazzoHTML = `<div style="position: absolute; right: 20px; ${posizioneY} transform: rotate(-5deg); z-index: 10; transition: all 0.5s ease;"><div class="playing-card card-back" style="box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div></div>`;
+        let posizioneMazzo = "right: 20px; top: -60px;"; 
+        if (indexMazziere === 0) posizioneMazzo = "right: 20px; bottom: -60px;";
+        else if (indexMazziere === 3) posizioneMazzo = "left: 10px; top: 50%; transform: translateY(-50%);";
+        else if (indexMazziere === 1) posizioneMazzo = "right: 10px; top: 50%; transform: translateY(-50%);";
+
+        mazzoHTML = `<div style="position: absolute; ${posizioneMazzo} z-index: 10; transition: all 0.5s ease;"><div class="playing-card card-back" style="box-shadow: -4px 4px 10px rgba(0,0,0,0.8);"><div style="background:rgba(0,0,0,0.8); color:white; border-radius:50%; width:25px; height:25px; display:flex; justify-content:center; align-items:center; position:absolute; top:-10px; right:-10px; font-weight:bold; font-size:0.8rem; border:2px solid var(--border-color);">${mazzoAttuale.length}</div></div></div>`;
     }
 
     let centroHTML = "";
     if (giocoInCorso === "scopa") {
         centroHTML += carteAlCentro.map((carta, i) => {
             let selectedClass = carteSelezionateTavolo.includes(i) ? "selezionata" : "";
-            return `<div class="playing-card ${selectedClass}" onclick="selezionaCartaTavolo(${i})" style="width: clamp(55px, 16vw, 75px); height: clamp(82px, 24vw, 112px); padding:0; background:none; border:none; z-index:5; transition: all 0.3s ease;"><img src="${carta.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width:100%; height:100%; border-radius:6px; pointer-events:none;"><div style="display:none; width:100%; height:100%; background:white; color:black; border:2px solid #000; border-radius:6px; flex-direction:column; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; pointer-events:none;">${carta.valore}</div></div>`;
+            return `<div class="playing-card ${selectedClass}" onclick="selezionaCartaTavolo(${i})" style="width: clamp(55px, 16vw, 75px); height: clamp(82px, 24vw, 112px); padding:0; background:none; border:none; z-index:5; transition: all 0.3s ease;"><img src="${carta.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width:100%; height:100%; border-radius:6px; pointer-events:none;"></div>`;
         }).join("");
     }
 
     let sceseHTML = carteGiocateOra.map((giocata) => {
-        let coloreGlow = giocata.proprietario === "io" ? "#44ff44" : "#ff4444";
-        return `<div style="width: 80px; height: 120px; border-radius:8px; box-shadow: 0 0 15px ${coloreGlow}; margin: 0 10px; transform: scale(1.1); z-index:20; position:relative; transition: all 0.3s ease;"><img src="${giocata.carta.imgStr}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width:100%; height:100%; border-radius:8px;"><div style="display:none; width:100%; height:100%; background:white; color:black; border:2px solid #000; border-radius:8px; flex-direction:column; align-items:center; justify-content:center; font-weight:bold; font-size:1.5rem;">${giocata.carta.valore}</div></div>`;
+        let coloreGlow = giocata.proprietarioIndex % 2 === 0 ? "#44ff44" : "#ff4444";
+        let posStyle = "position:relative; margin: 0 10px;";
+        if (numGiocatori === 4) {
+            if (giocata.proprietarioIndex === 0) posStyle = "position:absolute; bottom:-20px; left:50%; transform:translateX(-50%);";
+            if (giocata.proprietarioIndex === 1) posStyle = "position:absolute; right:-10px; top:50%; transform:translateY(-50%);";
+            if (giocata.proprietarioIndex === 2) posStyle = "position:absolute; top:-20px; left:50%; transform:translateX(-50%);";
+            if (giocata.proprietarioIndex === 3) posStyle = "position:absolute; left:-10px; top:50%; transform:translateY(-50%);";
+        }
+        return `<div style="width: 80px; height: 120px; border-radius:8px; box-shadow: 0 0 15px ${coloreGlow}; z-index:20; transition: all 0.3s ease; ${posStyle}"><img src="${giocata.carta.imgStr}" style="width:100%; height:100%; border-radius:8px;"></div>`;
     }).join("");
 
-    divCentro.innerHTML = centroHTML + mazzoHTML + "<div style='display:flex; justify-content:center; align-items:center; position:absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events:none; z-index: 30;'>" + sceseHTML + "</div>";
+    let croceStyle = numGiocatori === 4 ? "width: 250px; height: 250px; display:block; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);" : "width:100%; display:flex; justify-content:center; margin-top:15px; position:absolute; bottom: 20px; left:0;";
 
-    let pMioDisp = mioGiocatore.punti || 0; let pBotDisp = avversarioBot.punti || 0;
-    if (giocoInCorso === "briscola") { document.querySelector(".cards-hud span:first-child").innerHTML = `Round: Tu <b>${pMioDisp}</b> | Avv <b>${pBotDisp}</b> <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; } 
-    else { document.querySelector(".cards-hud span:first-child").innerHTML = `Mano: <b>${mioGiocatore.prese.length}</b> carte (Scope: ${mioGiocatore.scope}) <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; }
+    divCentro.innerHTML = centroHTML + mazzoHTML + `<div style='pointer-events:none; z-index: 30; ${croceStyle}'>` + sceseHTML + "</div>";
+
+    let pMioDisp = giocatori[0].punti + (numGiocatori===4 ? giocatori[2].punti : 0); 
+    let pBotDisp = giocatori[1].punti + (numGiocatori===4 ? giocatori[3].punti : 0);
     
-    // Aggiornamento corretto indicatore del turno
+    if (giocoInCorso === "briscola") { document.querySelector(".cards-hud span:first-child").innerHTML = `Round: Team 1 <b>${pMioDisp}</b> | Team 2 <b>${pBotDisp}</b> <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; } 
+    else { document.querySelector(".cards-hud span:first-child").innerHTML = `Prese Team 1: <b>${giocatori[0].prese.length + (numGiocatori===4?giocatori[2].prese.length:0)}</b> <br><span style="color:#c99c51">Totale: ${punteggioGlobaleMio} a ${punteggioGlobaleBot} (Target ${targetPuntiVittoria})</span>`; }
+    
     if (faseAnimazione || (!isHost && isPartitaMultiplayer && mazzoAttuale.length === 0)) return;
     
-    let timerTesto = (turnoDiChi === "io") ? ` <span style='color:gold; font-size:0.9em;'>(⏱️ ${secondiRimasti}s)</span>` : "";
-    document.getElementById("cards-turn-indicator").innerHTML = turnoDiChi === "io" ? `<span style='color:#44ff44'>Tuo Turno</span>${timerTesto}` : "<span style='color:#ff4444'>Turno Avversario...</span>";
+    let timerTesto = (indexTurnoAttuale === 0) ? ` <span style='color:gold; font-size:0.9em;'>(⏱️ ${secondiRimasti}s)</span>` : "";
+    document.getElementById("cards-turn-indicator").innerHTML = indexTurnoAttuale === 0 ? `<span style='color:#44ff44'>Tuo Turno</span>${timerTesto}` : `<span style='color:#ff4444'>Turno di ${giocatori[indexTurnoAttuale].name}...</span>`;
 }
 
-window.tentaGiocataMia = function(index) {
-    if (turnoDiChi !== "io" || faseAnimazione) return;
+window.tentaGiocataMia = function(indexMano) {
+    if (indexTurnoAttuale !== 0 || faseAnimazione) return;
     fermaTimer();
-    let cartaMia = mioGiocatore.mano[index];
+    
+    let cartaMia = giocatori[0].mano[indexMano];
 
     if (giocoInCorso === "scopa") {
         let prendibileSingola = carteAlCentro.findIndex(c => c.valoreScopa === cartaMia.valoreScopa);
@@ -264,205 +306,202 @@ window.tentaGiocataMia = function(index) {
             let somma = carteSelezionateTavolo.reduce((acc, i) => acc + carteAlCentro[i].valoreScopa, 0);
             if (somma === cartaMia.valoreScopa) {
                 if (prendibileSingola !== -1 && carteSelezionateTavolo.length > 1) { alert("C'è la singola a terra!"); gestisciTimer(); return; }
-                completaGiocataScopa(index, carteSelezionateTavolo);
+                completaGiocataScopa(0, indexMano, carteSelezionateTavolo);
             } else { alert("Somma errata!"); gestisciTimer(); }
         } else {
-            if (prendibileSingola !== -1) completaGiocataScopa(index, [prendibileSingola]); else completaGiocataScopa(index, []);
+            if (prendibileSingola !== -1) completaGiocataScopa(0, indexMano, [prendibileSingola]); else completaGiocataScopa(0, indexMano, []);
         }
-    } else { completaGiocataBriscola(index); }
+    } else { completaGiocataBriscola(0, indexMano); }
 };
 
-// 🌐 PROPAGAZIONE MULTIPLAYER: L'Avversario riproduce la tua mossa!
-function eseguiAzioneAvversarioRete(indexMano, indiciTavolo) {
-    fermaTimer(); faseAnimazione = true;
-    let cartaMessa = avversarioBot.mano.splice(indexMano, 1)[0];
-    carteGiocateOra.push({carta: cartaMessa, proprietario: "bot"});
-    if(typeof window.suonaEffetto === 'function') { try { window.suonaEffetto('carta'); } catch(e){} }
-    aggiornaInterfaccia();
-
-    if (giocoInCorso === "scopa") {
-        setTimeout(() => {
-            indiciTavolo.sort((a,b) => b-a);
-            if (indiciTavolo.length > 0) {
-                ultimoAPrendere = "avversario"; let prese = [cartaMessa];
-                indiciTavolo.forEach(i => prese.push(carteAlCentro.splice(i, 1)[0]));
-                avversarioBot.prese.push(...prese);
-                if (carteAlCentro.length === 0 && mazzoAttuale.length > 0) avversarioBot.scope++;
-            } else { carteAlCentro.push(cartaMessa); }
-
-            carteGiocateOra = []; turnoDiChi = "io"; aggiornaInterfaccia();
-            setTimeout(verificaPescataEPassa, 500);
-        }, 2000);
-    } else {
-        gestisciScontroBriscola("bot");
-    }
+// 🌐 RICEZIONE RETE
+function eseguiAzioneRete(pIndex, indexMano, indiciTavolo) {
+    if (giocoInCorso === "scopa") completaGiocataScopa(pIndex, indexMano, indiciTavolo || []);
+    else completaGiocataBriscola(pIndex, indexMano);
 }
 
-async function completaGiocataScopa(indexMano, indiciTavoloSelezionati) {
-    if (isPartitaMultiplayer && turnoDiChi === "io") socket.emit("carteAzione", { room: roomMulti, indexMano: indexMano, indiciTavolo: indiciTavoloSelezionati });
-    faseAnimazione = true;
-    let cartaMessa = mioGiocatore.mano.splice(indexMano, 1)[0];
-    carteGiocateOra.push({carta: cartaMessa, proprietario: "io"});
-    if(typeof window.suonaEffetto === 'function') { try { window.suonaEffetto('carta'); } catch(e){} }
-    aggiornaInterfaccia();
-
-    await attesa(2000); 
-
-    indiciTavoloSelezionati.sort((a,b) => b-a);
-    let prese = [];
-    if (indiciTavoloSelezionati.length > 0) {
-        ultimoAPrendere = "io"; prese.push(cartaMessa);
-        indiciTavoloSelezionati.forEach(i => prese.push(carteAlCentro.splice(i, 1)[0]));
-        mioGiocatore.prese.push(...prese);
-        if (carteAlCentro.length === 0 && mazzoAttuale.length > 0) { mioGiocatore.scope++; setTimeout(() => alert("🧹 SCOPA!"), 200); }
-    } else { carteAlCentro.push(cartaMessa); }
-
-    carteSelezionateTavolo = []; carteGiocateOra = []; aggiornaInterfaccia();
-    await attesa(500); turnoDiChi = "avversario"; verificaPescataEPassa();
-}
-
-function completaGiocataBriscola(indexMano) {
-    if (isPartitaMultiplayer && turnoDiChi === "io") socket.emit("carteAzione", { room: roomMulti, indexMano: indexMano });
-    faseAnimazione = true;
-    let cartaMessa = mioGiocatore.mano.splice(indexMano, 1)[0];
-    carteGiocateOra.push({carta: cartaMessa, proprietario: "io"});
-    if(typeof window.suonaEffetto === 'function') { try { window.suonaEffetto('carta'); } catch(e){} }
-    aggiornaInterfaccia();
-    gestisciScontroBriscola("io");
-}
-
-function turnoDelBot() {
-    if (isPartitaMultiplayer || avversarioBot.mano.length === 0) return; // 🌐 IL BOT NON ESISTE IN MULTIPLAYER!
+// 🤖 LOGICA BOT (Gestisce tutti i bot della stanza)
+function turnoDelBot(botIndex) {
+    if (isPartitaMultiplayer || giocatori[botIndex].mano.length === 0) return;
     fermaTimer();
     let indexManoScelto = 0; let indiciDaPrendere = []; let presaFatta = false;
 
     if (giocoInCorso === "scopa") {
-        for(let m=0; m<avversarioBot.mano.length; m++) {
-            let found = carteAlCentro.findIndex(c => c.valoreScopa === avversarioBot.mano[m].valoreScopa);
+        for(let m=0; m<giocatori[botIndex].mano.length; m++) {
+            let found = carteAlCentro.findIndex(c => c.valoreScopa === giocatori[botIndex].mano[m].valoreScopa);
             if(found !== -1) { indiciDaPrendere = [found]; indexManoScelto = m; presaFatta = true; break; }
         }
         if(!presaFatta && difficoltaBot !== "facile") {
-            for(let m=0; m<avversarioBot.mano.length && !presaFatta; m++) {
+            for(let m=0; m<giocatori[botIndex].mano.length && !presaFatta; m++) {
                 for(let i=0; i<carteAlCentro.length; i++) {
                     for(let j=i+1; j<carteAlCentro.length; j++) {
-                        if(carteAlCentro[i].valoreScopa + carteAlCentro[j].valoreScopa === avversarioBot.mano[m].valoreScopa) { indiciDaPrendere = [i, j]; indexManoScelto = m; presaFatta = true; break; }
+                        if(carteAlCentro[i].valoreScopa + carteAlCentro[j].valoreScopa === giocatori[botIndex].mano[m].valoreScopa) { indiciDaPrendere = [i, j]; indexManoScelto = m; presaFatta = true; break; }
                     }
                     if(presaFatta) break;
                 }
             }
         }
-        if(!presaFatta) indexManoScelto = Math.floor(Math.random() * avversarioBot.mano.length);
-        eseguiAzioneAvversarioRete(indexManoScelto, indiciDaPrendere); 
+        if(!presaFatta) indexManoScelto = Math.floor(Math.random() * giocatori[botIndex].mano.length);
+        completaGiocataScopa(botIndex, indexManoScelto, indiciDaPrendere); 
     } else {
-        indexManoScelto = Math.floor(Math.random() * avversarioBot.mano.length);
-        eseguiAzioneAvversarioRete(indexManoScelto, []);
+        indexManoScelto = Math.floor(Math.random() * giocatori[botIndex].mano.length);
+        completaGiocataBriscola(botIndex, indexManoScelto);
     }
 }
 
-async function gestisciScontroBriscola(ultimoGiocatore) {
-    if (carteGiocateOra.length < 2) {
-        turnoDiChi = (ultimoGiocatore === "io") ? "avversario" : "io";
+async function completaGiocataScopa(pIndex, indexMano, indiciTavoloSelezionati) {
+    if (isPartitaMultiplayer && pIndex === 0) socket.emit("carteAzione", { room: roomMulti, giocatoreId: socket.id, indexMano: indexMano, indiciTavolo: indiciTavoloSelezionati });
+    faseAnimazione = true;
+    let cartaMessa = giocatori[pIndex].mano.splice(indexMano, 1)[0];
+    carteGiocateOra.push({carta: cartaMessa, proprietarioIndex: pIndex});
+    if(typeof window.suonaEffetto === 'function') { try { window.suonaEffetto('carta'); } catch(e){} }
+    aggiornaInterfaccia();
+
+    await attesa(1500); 
+
+    indiciTavoloSelezionati.sort((a,b) => b-a);
+    let prese = [];
+    if (indiciTavoloSelezionati.length > 0) {
+        ultimoAPrendereTeam = giocatori[pIndex].team; 
+        prese.push(cartaMessa);
+        indiciTavoloSelezionati.forEach(i => prese.push(carteAlCentro.splice(i, 1)[0]));
+        giocatori[pIndex].prese.push(...prese);
+        if (carteAlCentro.length === 0 && mazzoAttuale.length > 0) { giocatori[pIndex].scope++; setTimeout(() => alert("🧹 SCOPA!"), 200); }
+    } else { carteAlCentro.push(cartaMessa); }
+
+    carteSelezionateTavolo = []; carteGiocateOra = []; aggiornaInterfaccia();
+    await attesa(200); 
+    
+    indexTurnoAttuale = (indexTurnoAttuale + 1) % numGiocatori; 
+    verificaPescataEPassa();
+}
+
+async function completaGiocataBriscola(pIndex, indexMano) {
+    if (isPartitaMultiplayer && pIndex === 0) socket.emit("carteAzione", { room: roomMulti, giocatoreId: socket.id, indexMano: indexMano });
+    faseAnimazione = true;
+    let cartaMessa = giocatori[pIndex].mano.splice(indexMano, 1)[0];
+    carteGiocateOra.push({carta: cartaMessa, proprietarioIndex: pIndex});
+    if(typeof window.suonaEffetto === 'function') { try { window.suonaEffetto('carta'); } catch(e){} }
+    aggiornaInterfaccia();
+    
+    if (carteGiocateOra.length < numGiocatori) {
+        indexTurnoAttuale = (indexTurnoAttuale + 1) % numGiocatori;
         faseAnimazione = false; aggiornaInterfaccia();
-        if (turnoDiChi === "avversario" && !isPartitaMultiplayer) setTimeout(turnoDelBot, 1500);
-        else gestisciTimer(); 
+        if (giocatori[indexTurnoAttuale].isBot) setTimeout(() => turnoDelBot(indexTurnoAttuale), 1200);
+        else if (indexTurnoAttuale === 0) gestisciTimer(); 
         return;
     }
 
-    await attesa(2500); 
+    await attesa(2500); // Mostra lo scontro
 
-    let c1 = carteGiocateOra[0]; let c2 = carteGiocateOra[1];
     let semeBriscola = cartaBriscola ? cartaBriscola.seme : null;
+    let semeIniziale = carteGiocateOra[0].carta.seme;
+    let cartaVincente = carteGiocateOra[0];
+    let forzaMax = forzaBriscola[cartaVincente.carta.valore];
+    if (cartaVincente.carta.seme === semeBriscola) forzaMax += 100;
+    let puntiGirati = puntiBriscola[cartaVincente.carta.valore];
 
-    let f1 = (c1.carta.seme === semeBriscola) ? forzaBriscola[c1.carta.valore] + 100 : forzaBriscola[c1.carta.valore];
-    let f2 = (c2.carta.seme === semeBriscola) ? forzaBriscola[c2.carta.valore] + 100 : (c2.carta.seme === c1.carta.seme ? forzaBriscola[c2.carta.valore] : -1);
+    for(let i=1; i<numGiocatori; i++) {
+        let c = carteGiocateOra[i];
+        puntiGirati += puntiBriscola[c.carta.valore];
+        let forzaC = -1;
+        if (c.carta.seme === semeBriscola) forzaC = forzaBriscola[c.carta.valore] + 100;
+        else if (c.carta.seme === semeIniziale) forzaC = forzaBriscola[c.carta.valore];
+        
+        if (forzaC > forzaMax) { forzaMax = forzaC; cartaVincente = c; }
+    }
 
-    let vincitore = (f2 > f1) ? c2.proprietario : c1.proprietario;
-    let puntiGirati = puntiBriscola[c1.carta.valore] + puntiBriscola[c2.carta.valore];
+    let vincitoreIndex = cartaVincente.proprietarioIndex;
+    giocatori[vincitoreIndex].punti += puntiGirati;
 
-    if (vincitore === "io") { mioGiocatore.punti = (mioGiocatore.punti || 0) + puntiGirati; chiHaIniziatoMano = "io"; } 
-    else { avversarioBot.punti = (avversarioBot.punti || 0) + puntiGirati; chiHaIniziatoMano = "avversario"; }
-
-    carteGiocateOra = []; turnoDiChi = chiHaIniziatoMano;
+    carteGiocateOra = []; indexTurnoAttuale = vincitoreIndex; 
     verificaPescataEPassa();
 }
 
 async function verificaPescataEPassa() {
     if (giocoInCorso === "scopa") {
-        if (mioGiocatore.mano.length === 0 && avversarioBot.mano.length === 0) {
+        if (giocatori.every(g => g.mano.length === 0)) {
             if (mazzoAttuale.length > 0) {
-                for (let i = 0; i < 3; i++) {
-                    await attesa(400); 
-                    if (turnoDiChi === "io") { mioGiocatore.mano.push(mazzoAttuale.pop()); avversarioBot.mano.push(mazzoAttuale.pop()); }
-                    else { avversarioBot.mano.push(mazzoAttuale.pop()); mioGiocatore.mano.push(mazzoAttuale.pop()); }
-                    aggiornaInterfaccia();
+                for (let j = 0; j < 3; j++) {
+                    for (let i = 0; i < numGiocatori; i++) {
+                        await attesa(150); 
+                        let targetIdx = (indexMazziere + 1 + i) % numGiocatori;
+                        giocatori[targetIdx].mano.push(mazzoAttuale.pop());
+                        aggiornaInterfaccia();
+                    }
                 }
             } else return chiudiManoEContaPunti();
         }
     } else if (giocoInCorso === "briscola") {
-        if (mioGiocatore.mano.length < 3 || avversarioBot.mano.length < 3) {
+        if (giocatori.some(g => g.mano.length < 3)) {
             if (mazzoAttuale.length > 0 || cartaBriscola) {
                 await attesa(500);
-                let c1 = mazzoAttuale.pop(); if(!c1 && cartaBriscola) { c1 = cartaBriscola; cartaBriscola = null; }
-                let c2 = mazzoAttuale.pop(); if(!c2 && cartaBriscola) { c2 = cartaBriscola; cartaBriscola = null; }
-                if (turnoDiChi === "io") { if (c1) mioGiocatore.mano.push(c1); if (c2) avversarioBot.mano.push(c2); } 
-                else { if (c1) avversarioBot.mano.push(c1); if (c2) mioGiocatore.mano.push(c2); }
+                for(let i=0; i<numGiocatori; i++) {
+                    let targetIdx = (indexTurnoAttuale + i) % numGiocatori; 
+                    let c = mazzoAttuale.pop(); if(!c && cartaBriscola) { c = cartaBriscola; cartaBriscola = null; }
+                    if (c) giocatori[targetIdx].mano.push(c);
+                }
                 aggiornaInterfaccia();
             }
         }
-        if (mioGiocatore.mano.length === 0 && avversarioBot.mano.length === 0) return chiudiManoEContaPunti();
+        if (giocatori.every(g => g.mano.length === 0)) return chiudiManoEContaPunti();
     }
     
     faseAnimazione = false; gestisciTimer(); aggiornaInterfaccia();
-    if(turnoDiChi === "avversario" && avversarioBot.mano.length > 0 && !isPartitaMultiplayer) setTimeout(turnoDelBot, 1500);
+    if(giocatori[indexTurnoAttuale].isBot) setTimeout(() => turnoDelBot(indexTurnoAttuale), 1200);
 }
 
 function chiudiManoEContaPunti() {
     fermaTimer(); let msg = "FINE MANO!\n\n";
 
     if (giocoInCorso === "scopa") {
-        if (ultimoAPrendere === "io") mioGiocatore.prese.push(...carteAlCentro); else if (ultimoAPrendere === "avversario") avversarioBot.prese.push(...carteAlCentro);
+        if (ultimoAPrendereTeam !== -1) {
+            let playerTarget = ultimoAPrendereTeam === 0 ? 0 : 1; 
+            giocatori[playerTarget].prese.push(...carteAlCentro);
+        }
         carteAlCentro = [];
 
-        let pMio = mioGiocatore.scope; let pBot = avversarioBot.scope;
-        let carteMio = mioGiocatore.prese.length; let carteBot = avversarioBot.prese.length;
-        if(carteMio > 20) { pMio++; msg += "CARTE: Tu (+1)\n"; } else if(carteBot > 20) { pBot++; msg += "CARTE: Avversario (+1)\n"; }
+        let preseTeam0 = giocatori[0].prese.concat(numGiocatori===4 ? giocatori[2].prese : []);
+        let preseTeam1 = giocatori[1].prese.concat(numGiocatori===4 ? giocatori[3].prese : []);
+        
+        let pMio = giocatori[0].scope + (numGiocatori===4 ? giocatori[2].scope : 0); 
+        let pBot = giocatori[1].scope + (numGiocatori===4 ? giocatori[3].scope : 0);
 
-        let oriMio = mioGiocatore.prese.filter(c => c.seme === 'oro').length; let oriBot = avversarioBot.prese.filter(c => c.seme === 'oro').length;
-        if(oriMio > 5) { pMio++; msg += "DENARI: Tu (+1)\n"; } else if(oriBot > 5) { pBot++; msg += "DENARI: Avversario (+1)\n"; }
+        if(preseTeam0.length > 20) { pMio++; msg += "CARTE: Team 1 (+1)\n"; } else if(preseTeam1.length > 20) { pBot++; msg += "CARTE: Team 2 (+1)\n"; }
 
-        let settebelloMio = mioGiocatore.prese.find(c => c.valore === 7 && c.seme === 'oro');
-        if(settebelloMio) { pMio++; msg += "SETTEBELLO: Tu (+1)\n"; } else { pBot++; msg += "SETTEBELLO: Avversario (+1)\n"; }
+        let oriMio = preseTeam0.filter(c => c.seme === 'oro').length; let oriBot = preseTeam1.filter(c => c.seme === 'oro').length;
+        if(oriMio > 5) { pMio++; msg += "DENARI: Team 1 (+1)\n"; } else if(oriBot > 5) { pBot++; msg += "DENARI: Team 2 (+1)\n"; }
+
+        if(preseTeam0.find(c => c.valore === 7 && c.seme === 'oro')) { pMio++; msg += "SETTEBELLO: Team 1 (+1)\n"; } else { pBot++; msg += "SETTEBELLO: Team 2 (+1)\n"; }
 
         let calcPrimiera = (prese) => { let maxM = { oro:0, coppe:0, spade:0, bastoni:0 }; prese.forEach(c => { if(valoriPrimiera[c.valore] > maxM[c.seme]) maxM[c.seme] = valoriPrimiera[c.valore]; }); return maxM.oro + maxM.coppe + maxM.spade + maxM.bastoni; };
-        let priMio = calcPrimiera(mioGiocatore.prese); let priBot = calcPrimiera(avversarioBot.prese);
-        if(priMio > priBot) { pMio++; msg += "PRIMIERA: Tu (+1)\n"; } else if(priBot > priMio) { pBot++; msg += "PRIMIERA: Avversario (+1)\n"; }
+        let priMio = calcPrimiera(preseTeam0); let priBot = calcPrimiera(preseTeam1);
+        if(priMio > priBot) { pMio++; msg += "PRIMIERA: Team 1 (+1)\n"; } else if(priBot > priMio) { pBot++; msg += "PRIMIERA: Team 2 (+1)\n"; }
 
         punteggioGlobaleMio += pMio; punteggioGlobaleBot += pBot;
     } else {
-        punteggioGlobaleMio += (mioGiocatore.punti || 0); punteggioGlobaleBot += (avversarioBot.punti || 0);
-        msg += `Punti Tuoi: ${mioGiocatore.punti || 0} | Punti Avversario: ${avversarioBot.punti || 0}\n`;
+        let pMio = giocatori[0].punti + (numGiocatori===4 ? giocatori[2].punti : 0);
+        let pBot = giocatori[1].punti + (numGiocatori===4 ? giocatori[3].punti : 0);
+        punteggioGlobaleMio += pMio; punteggioGlobaleBot += pBot;
+        msg += `Punti Team 1: ${pMio} | Punti Team 2: ${pBot}\n`;
     }
 
-    msg += `\nPUNTEGGIO TOTALE:\nTu: ${punteggioGlobaleMio} / ${targetPuntiVittoria}\nAvv: ${punteggioGlobaleBot} / ${targetPuntiVittoria}`;
+    msg += `\nPUNTEGGIO TOTALE:\nTeam 1: ${punteggioGlobaleMio} / ${targetPuntiVittoria}\nTeam 2: ${punteggioGlobaleBot} / ${targetPuntiVittoria}`;
     aggiornaInterfaccia();
 
     setTimeout(() => {
         alert(msg);
         if (punteggioGlobaleMio >= targetPuntiVittoria || punteggioGlobaleBot >= targetPuntiVittoria) {
-            let esito = punteggioGlobaleMio > punteggioGlobaleBot ? "🏆 HAI VINTO LA PARTITA!" : (punteggioGlobaleMio === punteggioGlobaleBot ? "Pareggio!" : "☠️ Hai perso la partita.");
+            let esito = punteggioGlobaleMio > punteggioGlobaleBot ? "🏆 IL TUO TEAM HA VINTO!" : (punteggioGlobaleMio === punteggioGlobaleBot ? "Pareggio!" : "☠️ Sconfitta.");
             alert("🔥 PARTITA CONCLUSA! 🔥\n\n" + esito); window.esciDaTavoloCarte();
         } else {
-            // SI CAMBIA IL MAZZIERE A FINE MANO!
-            chiHaIniziatoMano = (chiHaIniziatoMano === "io") ? "avversario" : "io";
-            
+            // L'Host smazza per tutti i turni in Multiplayer, ma cambiamo il primo a giocare!
+            indexTurnoAttuale = (indexTurnoAttuale + 1) % numGiocatori; 
             if (isPartitaMultiplayer) {
-                if (isHost) {
-                    iniziaNuovaSmazzata(); 
-                } else {
-                    document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>";
-                    mazzoAttuale = []; aggiornaInterfaccia(); 
-                }
+                if (isHost) iniziaNuovaSmazzata(); 
+                else { document.getElementById("cards-turn-indicator").innerHTML = "<span style='color:gold;'>Attendi il Mazziere (Host)...</span>"; mazzoAttuale = []; aggiornaInterfaccia(); }
             } else {
+                indexMazziere = (indexMazziere + 1) % numGiocatori;
                 iniziaNuovaSmazzata();
             }
         }
