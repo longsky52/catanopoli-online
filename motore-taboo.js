@@ -116,26 +116,6 @@ let turnoAttivoTaboo = false;
 let roomTaboo = "";
 let myNameTaboo = "Tu";
 
-// 🔥 GENERATORI AUDIO PROCEDURALI (SINTETIZZATI DAL BROWSER) 🔥
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-function playTone(freq, type, duration, vol=0.5) {
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    let osc = audioCtx.createOscillator();
-    let gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
-}
-function suonaBuzzerErrore() { playTone(150, 'sawtooth', 0.4, 0.8); setTimeout(() => playTone(120, 'square', 0.5, 0.8), 200); }
-function suonaDingEsatto() { playTone(800, 'sine', 0.1, 0.4); setTimeout(() => playTone(1200, 'sine', 0.4, 0.4), 100); }
-
-// 🔥 STILI FORZATI PER AFFIANCARE LE DUE VIDEOCAMERE IN MODO PERFETTO 🔥
 const styleVidTaboo = document.createElement('style');
 styleVidTaboo.innerHTML = `
     #taboo-video-area #afk-video-grid {
@@ -172,7 +152,6 @@ window.avviaPartitaTaboo = function(roomData) {
     document.getElementById("taboo-score").innerText = punteggioTaboo;
     resettaCartaTaboo();
     
-    // Creiamo il testo di stato se non esiste
     if (!document.getElementById("taboo-turn-status")) {
         let st = document.createElement("div");
         st.id = "taboo-turn-status";
@@ -185,19 +164,14 @@ window.avviaPartitaTaboo = function(roomData) {
     document.getElementById("btn-taboo-start").style.display = "block";
     document.getElementById("btn-taboo-start").innerText = "▶️ INIZIA IL MIO TURNO";
 
-    // 💡 TRUCCO MAGICO PER LA VIDEOCHAT
     let afkGrid = document.getElementById("afk-video-grid");
     let tabooVideoArea = document.getElementById("taboo-video-area");
     if(afkGrid && tabooVideoArea) {
         tabooVideoArea.appendChild(afkGrid);
     }
     
-    // Accende automaticamente videocamera e microfono!
-    if (typeof accendiMedia === 'function') {
-        setTimeout(() => { accendiMedia(true); }, 800); 
-    }
+    if (typeof accendiMedia === 'function') setTimeout(() => { accendiMedia(true); }, 800); 
 
-    // 🌐 RICEZIONE PACCHETTI SINCRONIZZAZIONE TURNI
     if(typeof socket !== 'undefined' && socket) {
         socket.off("riceviTabooAzione");
         socket.on("riceviTabooAzione", (data) => {
@@ -206,13 +180,11 @@ window.avviaPartitaTaboo = function(roomData) {
             let cardBox = document.getElementById("taboo-card-container");
             
             if (data.action === "start") {
-                // IL TUO AVVERSARIO HA INIZIATO IL TURNO!
-                turnoAttivoTaboo = true; // Ti blocca, così non fai danni
+                turnoAttivoTaboo = true; 
                 btnStart.style.display = "none";
-                cardBox.style.display = "none"; // Nasconde le carte così non puoi barare!
+                cardBox.style.display = "none"; 
                 statusText.innerHTML = `🗣️ Turno di <b style="color:#ffdf00;">${data.playerName}</b> in corso!<br>Ascolta la sua voce e indovina!`;
                 
-                // Ti fa vedere il timer scorrere!
                 tabooTimeLeft = 60;
                 document.getElementById("taboo-timer").innerText = tabooTimeLeft;
                 clearInterval(timerTaboo);
@@ -223,12 +195,10 @@ window.avviaPartitaTaboo = function(roomData) {
                 }, 1000);
 
             } else if (data.action === "end") {
-                // IL TURNO DELL'AVVERSARIO È FINITO!
                 turnoAttivoTaboo = false;
                 clearInterval(timerTaboo);
                 document.getElementById("taboo-timer").innerText = "SCADUTO";
                 
-                // Rivela i risultati e sblocca il bottone per te
                 btnStart.style.display = "block";
                 btnStart.innerText = "▶️ TOCCA A TE! INIZIA TURNO";
                 cardBox.style.display = "flex";
@@ -242,17 +212,26 @@ window.avviaPartitaTaboo = function(roomData) {
 };
 
 window.esciDaTaboo = function() {
-    if (confirm("Vuoi abbandonare la stanza Taboo?")) {
-        if(typeof socket !== 'undefined' && socket) socket.disconnect(); 
-        window.location.reload();
+    if (typeof customConfirm !== 'undefined') {
+        customConfirm("Vuoi abbandonare la stanza Taboo?", function() {
+            if(typeof socket !== 'undefined' && socket) socket.disconnect(); 
+            window.location.reload();
+        });
+    } else {
+        if(confirm("Vuoi abbandonare la stanza Taboo?")) {
+            if(typeof socket !== 'undefined' && socket) socket.disconnect(); 
+            window.location.reload();
+        }
     }
 };
 
 window.iniziaTurnoTaboo = function() {
     if(turnoAttivoTaboo) return;
-    if(audioCtx.state === 'suspended') audioCtx.resume();
     
-    alert("ONESTÀ CATANESE: L'avversario non vede la tua carta.\n\nSe pronunci una delle parole vietate o una parola con la stessa radice, DEVI premere ❌ TABOO!");
+    // NIENTE PIU' ALERT: USA IL NUOVO POPUP BELLISSIMO!
+    if(typeof window.alert === 'function') {
+        window.alert("ONESTÀ CATANESE:\nL'avversario non vede la tua carta.\n\nSe pronunci una delle parole vietate o una parola con la stessa radice, DEVI premere ❌ TABOO!");
+    }
     
     turnoAttivoTaboo = true;
     punteggioTaboo = 0;
@@ -266,13 +245,11 @@ window.iniziaTurnoTaboo = function() {
     document.getElementById("btn-taboo-ok").disabled = false;
     document.getElementById("btn-taboo-err").disabled = false;
 
-    // INVIA AL SERVER IL SEGNALE DI INIZIO
     if (typeof socket !== 'undefined' && socket) {
         socket.emit("tabooAzione", { room: roomTaboo, action: "start", playerName: myNameTaboo });
     }
     
-    playTone(1000, 'sine', 0.2);
-    setTimeout(() => playTone(1500, 'sine', 0.3), 200);
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_start'); }catch(e){}
 
     pescaCartaTaboo();
 
@@ -281,7 +258,7 @@ window.iniziaTurnoTaboo = function() {
         document.getElementById("taboo-timer").innerText = tabooTimeLeft;
         
         if(tabooTimeLeft <= 5 && tabooTimeLeft > 0) {
-            playTone(2000, 'triangle', 0.05, 0.2);
+            if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_tic'); }catch(e){}
         }
 
         if(tabooTimeLeft <= 0) {
@@ -295,16 +272,14 @@ function fineTurnoTaboo() {
     turnoAttivoTaboo = false;
     document.getElementById("taboo-timer").innerText = "TEMPO SCADUTO!";
     
-    suonaBuzzerErrore();
-    setTimeout(suonaBuzzerErrore, 500);
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_fine'); }catch(e){}
     
     document.getElementById("btn-taboo-ok").disabled = true;
     document.getElementById("btn-taboo-err").disabled = true;
-    document.getElementById("btn-taboo-start").style.display = "none"; // SI NASCONDE, PERCHE TOCCA ALL'ALTRO!
+    document.getElementById("btn-taboo-start").style.display = "none"; 
     
     document.getElementById("taboo-turn-status").innerHTML = `Hai indovinato <b style="color:#ffdf00;">${punteggioTaboo}</b> carte!<br>Attendi che l'avversario inizi il suo turno.`;
 
-    // INVIA AL SERVER IL TUO PUNTEGGIO E SBLOCCA L'AVVERSARIO
     if (typeof socket !== 'undefined' && socket) {
         socket.emit("tabooAzione", { room: roomTaboo, action: "end", playerName: myNameTaboo, score: punteggioTaboo });
     }
@@ -338,12 +313,12 @@ window.tabooIndovinata = function() {
     if(!turnoAttivoTaboo) return;
     punteggioTaboo++;
     document.getElementById("taboo-score").innerText = punteggioTaboo;
-    suonaDingEsatto(); 
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_esatto'); }catch(e){}
     pescaCartaTaboo(); 
 };
 
 window.tabooErrore = function() {
     if(!turnoAttivoTaboo) return;
-    suonaBuzzerErrore(); 
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_errore'); }catch(e){}
     pescaCartaTaboo(); 
 };
