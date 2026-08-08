@@ -61,7 +61,7 @@ io.on("connection", (socket) => {
 
     if (roomData.pass && roomData.pass !== roomPass) { socket.emit("roomError", "Password errata!"); return; }
     
-    // 🔥 LIMITI GIOCATORI DINAMICI
+    // LIMITI GIOCATORI DINAMICI
     let maxP = roomData.maxPlayers || ((roomData.gioco === "carte" || roomData.gioco === "forza4") && !isAFK ? 2 : 4);
     
     if (roomData.players.length >= maxP) {
@@ -98,15 +98,17 @@ io.on("connection", (socket) => {
   });
 
   // ==========================================
-  // 🃏 POSTINI PER LE CARTE E PER IL FORZA 4 🔴
+  // 📨 POSTINI DEI GIOCHI IN MULTIPLAYER
   // ==========================================
   socket.on("carteSyncInit", (data) => { socket.to(data.room).emit("riceviCarteSyncInit", data); });
   socket.on("carteAzione", (data) => { socket.to(data.room).emit("riceviCarteAzione", data); });
 
-  // I nuovi postini che si assicurano che l'avversario veda cadere i gettoni!
   socket.on("f4SyncInit", (data) => { socket.to(data.room).emit("riceviF4SyncInit", data); });
   socket.on("f4Mossa", (data) => { socket.to(data.room).emit("riceviF4Mossa", data); });
   socket.on("f4Restart", (data) => { socket.to(data.room).emit("riceviF4Restart", data); });
+
+  // 🔥 ECCO IL NUOVO POSTINO PER SINCRONIZZARE I TURNI DEL TABOO!
+  socket.on("tabooAzione", (data) => { socket.to(data.room).emit("riceviTabooAzione", data); });
   // ==========================================
 
   socket.on("sendTradeOffer", (data) => { io.to(data.room).emit("receiveTradeOffer", data); });
@@ -157,7 +159,7 @@ function getPublicRooms() {
   for (const r in rooms) {
     let isAFK = r.includes("[AFK]");
     if (rooms[r].status === "waiting" || (isAFK && rooms[r].players.length < 4)) {
-      let iconaGioco = rooms[r].gioco === "carte" ? "🃏" : (rooms[r].gioco === "forza4" ? "🔴" : "🎲");
+      let iconaGioco = rooms[r].gioco === "carte" ? "🃏" : (rooms[r].gioco === "forza4" ? "🔴" : (rooms[r].gioco === "taboo" ? "🗣️" : "🎲"));
       if (isAFK) iconaGioco = "☕";
       list.push({ name: iconaGioco + " " + r, rawName: r, playersCount: rooms[r].players.length, hasPass: rooms[r].pass !== "", gioco: rooms[r].gioco });
     }
