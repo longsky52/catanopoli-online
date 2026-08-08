@@ -1,6 +1,6 @@
 // ==========================================
-// MOTORE TABOO SICILIANO (TOTALITY GAMES) - V2
-// Suoni Procedurali, Layout Video Ampio, 50 Carte
+// MOTORE TABOO SICILIANO (TOTALITY GAMES) - V3
+// Suoni Realistici Esterni e Telecamere Affiancate
 // ==========================================
 
 const mazzoTaboo = [
@@ -25,7 +25,7 @@ const mazzoTaboo = [
     { w: "CARNE DI CAVALLO", f: ["Plebiscito", "Arrustire", "Mangiare", "Panino", "Fumo"] },
     { w: "MACCHINETTA", f: ["Caffè", "Gettoni", "Pausa", "Scuola", "Bere"] },
     
-    // 🔥 NUOVE 30 CARTE!
+    // NUOVE CARTE
     { w: "PUPARI", f: ["Teatro", "Spada", "Marionette", "Orlando", "Spettacolo"] },
     { w: "CANNOLO", f: ["Ricotta", "Dolce", "Scorza", "Pistacchio", "Gocce"] },
     { w: "PLAYA", f: ["Sabbia", "Lidi", "Estate", "Viale Kennedy", "Mare"] },
@@ -63,67 +63,44 @@ let timerTaboo = null;
 let tabooTimeLeft = 60;
 let turnoAttivoTaboo = false;
 
-// 🔥 GENERATORI AUDIO PROCEDURALI (SINTETIZZATI DAL BROWSER) 🔥
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-function playTone(freq, type, duration, vol=0.5) {
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    let osc = audioCtx.createOscillator();
-    let gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    
-    // Envelope (per non farlo "schioccare")
-    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-    
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
-}
-
-function suonaBuzzerErrore() {
-    // Doppio Beep Basso e Cattivo (Sconfitta/Taboo)
-    playTone(150, 'sawtooth', 0.4, 0.8);
-    setTimeout(() => playTone(120, 'square', 0.5, 0.8), 200);
-}
-
-function suonaDingEsatto() {
-    // Campanellino Squillante (Vittoria/Esatto)
-    playTone(800, 'sine', 0.1, 0.4);
-    setTimeout(() => playTone(1200, 'sine', 0.4, 0.4), 100);
-}
-
+// 🔥 STILI FORZATI PER AFFIANCARE LE DUE VIDEOCAMERE IN MODO PERFETTO 🔥
+const styleVidTaboo = document.createElement('style');
+styleVidTaboo.innerHTML = `
+    #taboo-video-area #afk-video-grid {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        justify-content: center !important;
+        align-items: center !important;
+        height: 180px !important;
+        background: transparent !important;
+    }
+    #taboo-video-area #afk-video-grid > div {
+        flex: 1 1 50% !important;
+        max-width: 50% !important;
+        height: 100% !important;
+        aspect-ratio: auto !important;
+        border-radius: 12px;
+        margin: 0 4px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    }
+    #taboo-video-area video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        border-radius: 12px !important;
+    }
+`;
+document.head.appendChild(styleVidTaboo);
 
 window.avviaPartitaTaboo = function(roomData) {
     punteggioTaboo = 0;
     document.getElementById("taboo-score").innerText = punteggioTaboo;
     resettaCartaTaboo();
     
-    // 💡 TRUCCO MAGICO PER LA VIDEOCHAT: 
-    // Spostiamo la griglia video della Sala AFK dentro l'area Taboo!
+    // Spostiamo la griglia video della Sala AFK dentro l'area Taboo
     let afkGrid = document.getElementById("afk-video-grid");
     let tabooVideoArea = document.getElementById("taboo-video-area");
-    
     if(afkGrid && tabooVideoArea) {
-        // 🔥 REGOLE CSS PER RENDERLA BELLA LARGA E VISIBILE
-        afkGrid.style.height = "auto";
-        afkGrid.style.minHeight = "180px";
-        afkGrid.style.flexWrap = "wrap"; 
-        afkGrid.style.overflowX = "hidden";
-        afkGrid.style.background = "transparent";
-        afkGrid.style.width = "100%";
-        afkGrid.style.justifyContent = "center";
-        
-        // Cerca i video per farli più larghi
-        let wrappers = afkGrid.querySelectorAll("div[id^='wrapper-'], #my-video-wrapper");
-        wrappers.forEach(w => {
-            w.style.flex = "1 1 45%"; // Prende mezza riga
-            w.style.maxWidth = "280px";
-            w.style.aspectRatio = "4/3"; // Più "quadrati" e meno schiacciati
-        });
-
         tabooVideoArea.appendChild(afkGrid);
     }
     
@@ -143,10 +120,7 @@ window.esciDaTaboo = function() {
 window.iniziaTurnoTaboo = function() {
     if(turnoAttivoTaboo) return;
     
-    // Inizializza l'audio-context su interazione utente (richiesto dai browser)
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    
-    alert("ONESTÀ CATANESE: L'avversario non vede la tua carta.\n\nSe pronunci una delle parole vietate o una parola con la stessa radice, DEVI premere ❌ TABOO!");
+    alert("ONESTÀ CATANESE: L'avversario non vede la tua carta.\n\nSe pronunci una delle parole vietate o usi una traduzione/radice simile, DEVI premere ❌ TABOO!");
     
     turnoAttivoTaboo = true;
     tabooTimeLeft = 60;
@@ -156,9 +130,8 @@ window.iniziaTurnoTaboo = function() {
     document.getElementById("btn-taboo-ok").disabled = false;
     document.getElementById("btn-taboo-err").disabled = false;
     
-    // Suonino d'avvio (Ding alto e veloce)
-    playTone(1000, 'sine', 0.2);
-    setTimeout(() => playTone(1500, 'sine', 0.3), 200);
+    // Suono Inizio Turno
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_start'); }catch(e){}
 
     pescaCartaTaboo();
 
@@ -166,9 +139,9 @@ window.iniziaTurnoTaboo = function() {
         tabooTimeLeft--;
         document.getElementById("taboo-timer").innerText = tabooTimeLeft;
         
-        // Ticchettio ultimi 5 secondi
+        // Tic Tac finali (ultimi 5 secondi)
         if(tabooTimeLeft <= 5 && tabooTimeLeft > 0) {
-            playTone(2000, 'triangle', 0.05, 0.2);
+            if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_tic'); }catch(e){}
         }
 
         if(tabooTimeLeft <= 0) {
@@ -183,8 +156,7 @@ function fineTurnoTaboo() {
     document.getElementById("taboo-timer").innerText = "TEMPO SCADUTO!";
     
     // Suono Sirena di fine turno
-    suonaBuzzerErrore();
-    setTimeout(suonaBuzzerErrore, 500);
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_fine'); }catch(e){}
     
     document.getElementById("btn-taboo-ok").disabled = true;
     document.getElementById("btn-taboo-err").disabled = true;
@@ -221,13 +193,17 @@ window.tabooIndovinata = function() {
     punteggioTaboo++;
     document.getElementById("taboo-score").innerText = punteggioTaboo;
     
-    suonaDingEsatto(); // Il nuovo suono procedurale
+    // Suono Reale Esatto
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_esatto'); }catch(e){}
+    
     pescaCartaTaboo(); 
 };
 
 window.tabooErrore = function() {
     if(!turnoAttivoTaboo) return;
     
-    suonaBuzzerErrore(); // Il nuovo buzzer brutto
+    // Suono Reale Buzzer
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('taboo_errore'); }catch(e){}
+    
     pescaCartaTaboo(); 
 };
