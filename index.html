@@ -1204,19 +1204,27 @@
     </div>
 
     <div id="risiko-ui" style="display:none; flex-direction:column; align-items:center; justify-content:flex-start; height:100vh; width:100%; background:#141b29; position:relative; z-index:50;">
-      <!-- HUD SUPERIORE -->
-      <div style="width: 100%; background: #0a0e17; padding: 10px; border-bottom: 2px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; z-index: 10;">
-          <button class="btn-exit" style="position:relative; top:0; right:0;" onclick="if(typeof esciDaRisiko === 'function') esciDaRisiko(); else window.location.reload();">✖</button>
+      <!-- HUD SUPERIORE: Ridisegnato per il Mobile -->
+      <div style="width: 100%; background: #0a0e17; padding: 10px; border-bottom: 2px solid var(--border-color); display: flex; flex-direction: column; z-index: 10; gap: 8px;">
           
-          <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
-              <span id="risiko-fase-titolo" style="color: #c99c51; font-weight: bold; font-size: 1.2rem; text-transform: uppercase;">INIZIALIZZAZIONE</span>
-              <span id="risiko-info-turno" style="color: white; font-size: 0.8rem;">Attesa giocatori...</span>
+          <!-- Riga 1: X, Bottone Obiettivo, Ingranaggio -->
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <button class="btn-exit" style="position:relative; top:0; right:0;" onclick="if(typeof esciDaRisiko === 'function') esciDaRisiko(); else window.location.reload();">✖</button>
+              
+              <!-- Il bottone obiettivo che prima inserivamo via JS, ora è già qui bello comodo! -->
+              <button class="btn secondary" style="padding: 6px 12px; font-size: 0.8rem; border-color: #ffdf00; color: #ffdf00; border-radius: 20px;" onclick="window.alert('IL TUO OBIETTIVO SEGRETO:\\n\\n' + (typeof mioObiettivo !== 'undefined' ? mioObiettivo : 'Caricamento...'))">🎯 OBIETTIVO</button>
+              
+              <button onclick="apriImpostazioni()" style="background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; justify-content: center; align-items: center;">⚙️</button>
           </div>
 
-          <button onclick="apriImpostazioni()" style="background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; justify-content: center; align-items: center;">⚙️</button>
+          <!-- Riga 2: Titolo Fase e Info Turno -->
+          <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+              <span id="risiko-fase-titolo" style="color: #c99c51; font-weight: bold; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px;">INIZIALIZZAZIONE</span>
+              <span id="risiko-info-turno" style="color: white; font-size: 0.85rem;">Attesa giocatori...</span>
+          </div>
       </div>
 
-      <!-- MAPPA DI GIOCO (ZOOMABILE) -->
+      <!-- MAPPA DI GIOCO (Aggiunto padding-top per abbassarla un po') -->
       <div id="risiko-map-container" style="flex: 1; width: 100%; position: relative; overflow: auto; display: flex; justify-content: center; align-items: center; background: radial-gradient(circle, #2a3b5c, #0f121a);">
           <div id="risiko-map" style="position: relative; width: 800px; height: 800px; transform: scale(0.45); transform-origin: center;">
               <!-- I quartieri verranno iniettati qui da JS! -->
@@ -4684,7 +4692,9 @@
 
       // 🔥 MAGIA: INTERCETTIAMO TUTTI GLI ALERT E I CONFIRM DEL TELEFONO! 🔥
       window.alert = function(msg) {
-          document.getElementById("custom-alert-text").innerHTML = String(msg).replace(/\n/g, "<br>");
+          // Fix definitivo: sostituisce sia i veri a capo che la scritta testuale "\n"
+          let cleanMsg = String(msg).replace(/\n/g, "<br>").replace(/\\n/g, "<br>");
+          document.getElementById("custom-alert-text").innerHTML = cleanMsg;
           document.getElementById("custom-alert-box").style.display = "flex";
       };
 
