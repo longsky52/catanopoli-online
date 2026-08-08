@@ -6,7 +6,6 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-  
     <title>Catanopoli</title>
     
     <!-- MAGIA PER IL FULLSCREEN (COLLEGA IL MANIFEST) -->
@@ -1421,7 +1420,7 @@
       <h2 style="color: #c99c51; margin-top: 15px; margin-bottom: 0px; font-size: 1.5rem; text-shadow: 0 2px 4px black; text-align: center; border-bottom: 1px solid #c99c51; padding-bottom: 5px;">ADDIVETTITI</h2>
       
       <!-- AVVERSARIO -->
-      <div style="text-align: center; color: white; font-weight: bold; margin-top: 10px; font-size: 0.85rem;"> <span id="cards-opponent-name" style="color: #ff4444;">In attesa...</span></div>
+      <div style="text-align: center; color: white; font-weight: bold; margin-top: 10px; font-size: 0.85rem;">Avversario: <span id="cards-opponent-name" style="color: #ff4444;">In attesa...</span></div>
       <div class="opponent-hand" id="opponent-hand">
         <div class="playing-card card-back"></div>
         <div class="playing-card card-back"></div>
@@ -2622,39 +2621,42 @@
             .join("");
         });
 
-        // GESTIONE SALA D'ATTESA
+        // GESTIONE SALA D'ATTESA (CON FIX LIMITI GIOCATORI E AFK)
         socket.on("waitingRoomUpdate", function (roomData) {
           document.getElementById("waiting-room-menu").style.display = "flex";
-          document.getElementById("waiting-room-title").innerText =
-            "Stanza: " + myRoom;
+          document.getElementById("waiting-room-title").innerText = "Stanza: " + myRoom;
 
-          let listaGiocatoriHTML = roomData.players
-            .map(function (p, i) {
-              return (
-                "<li>" +
-                (i + 1) +
-                ". <span style='color:" +
-                p.color +
-                "'>" +
-                p.name +
-                "</span> " +
-                (p.id === roomData.hostId ? "👑" : "") +
-                "</li>"
-              );
-            })
-            .join("");
-          document.getElementById("waiting-players-list").innerHTML =
-            listaGiocatoriHTML;
+          let listaGiocatoriHTML = roomData.players.map(function (p, i) {
+              return "<li>" + (i + 1) + ". <span style='color:" + p.color + "'>" + p.name + "</span> " + (p.id === roomData.hostId ? "👑" : "") + "</li>";
+          }).join("");
+          document.getElementById("waiting-players-list").innerHTML = listaGiocatoriHTML;
 
-            if (socket.id === roomData.hostId) {
+          if (socket.id === roomData.hostId) {
             document.getElementById("waiting-text").style.display = "none";
             let btnAvvia = document.getElementById("btn-start-multi");
             btnAvvia.style.display = "flex";
-            
-            // 🔥 ORA ASPETTA 2 O 4 GIOCATORI A SECONDA DEL LIMITE DELLA STANZA
-            let maxP = roomData.maxPlayers || 4;
-            btnAvvia.disabled = roomData.players.length < maxP;
-            btnAvvia.innerHTML = roomData.players.length < maxP ? `ATTENDI GIOCATORI (${roomData.players.length}/${maxP})...` : "AVVIA PARTITA";
+
+            // 🔥 LOGICA DINAMICA: Calcola quanti giocatori servono in base al gioco!
+            let minPlayers = 2; // Di base servono minimo 2 persone
+            let maxPlayers = 4; // Di base il limite massimo è 4
+
+            if (roomData.gioco === "carte") {
+                maxPlayers = 2; // Le carte si giocano in 2 massimo
+            } else if (myRoom.includes("[AFK]")) {
+                minPlayers = 1; // 💡 L'Host può aprire la Sala AFK anche da solo e aspettare dentro in video!
+                maxPlayers = 4;
+            }
+
+            let current = roomData.players.length;
+
+            if (current < minPlayers) {
+                btnAvvia.disabled = true;
+                btnAvvia.innerHTML = "ATTENDI GIOCATORI (" + current + "/" + maxPlayers + ")...";
+            } else {
+                btnAvvia.disabled = false;
+                btnAvvia.innerHTML = "AVVIA PARTITA (" + current + "/" + maxPlayers + ")";
+            }
+
           } else {
             document.getElementById("waiting-text").style.display = "block";
             document.getElementById("btn-start-multi").style.display = "none";
