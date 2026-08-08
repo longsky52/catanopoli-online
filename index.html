@@ -838,6 +838,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="motore-carte.js"></script>
+    <script src="motore-forza4.js"></script>
   </head>
   <body>
     <!-- BANNER INSTALLAZIONE APP -->
@@ -1001,10 +1002,16 @@
         </div>
 
         <!-- GIOCO 4: FORZA 4 -->
-        <div class="game-card locked">
+        <div class="game-card">
           <div style="font-size: 3rem; margin-bottom: 5px;">🔴</div>
           <div class="game-title">FORZA 4</div>
           <p class="game-desc">Allinea 4 gettoni prima del tuo avversario. Rapido e letale.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 15px;">
+            <button class="btn" style="font-size: 0.85rem; padding: 10px;" onclick="giocoSelezionato='forza4'; showSetup('forza4_menu')">👤 SINGLE PLAYER (BOT)</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #2c4a8a, #4a7acc);" onclick="giocoSelezionato='forza4'; showSetup('multi')">🌐 MULTIPLAYER ONLINE</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="showSetup('afk')">☕ SALA AFK (VIP LOUNGE)</button>
+          </div>
         </div>
       </div>
 
@@ -1114,6 +1121,47 @@
          }
       }
     </script>
+
+    <!-- MENU SETUP SPECIFICO PER FORZA 4 -->
+    <div id="forza4-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 20px">FORZA 4</h2>
+      <div class="input-group">
+        <label>DIFFICOLTÀ BOT:</label>
+        <select id="forza4-setup-diff">
+          <option value="facile">Principiante (Mette a caso)</option>
+          <option value="medio" selected>Intermedio (Blocca e Attacca)</option>
+          <option value="difficile">Squalo (Calcolatore)</option>
+        </select>
+      </div>
+      <button class="btn" style="max-width: 300px; margin-top: 20px" onclick="if(typeof avviaPartitaDaMenuForza4 === 'function') avviaPartitaDaMenuForza4(); else alert('Caricamento motore in corso...');">AVVIA PARTITA</button>
+      <button class="btn secondary" style="max-width: 300px; margin-top: 10px" onclick="goBackMenu()">INDIETRO</button>
+    </div>
+
+    <!-- UI FORZA 4 (TABELLONE) -->
+    <div id="forza4-ui" style="display:none; flex-direction:column; align-items:center; justify-content:flex-start; padding-top: 75px; height:100vh; width:100%; background:radial-gradient(circle, #2a3b5c, #0f121a); position:relative; z-index:50;">
+      <button class="btn-exit" onclick="if(typeof esciDaForza4 === 'function') esciDaForza4(); else window.location.reload();">✖</button>
+      <button onclick="apriImpostazioni()" style="position: absolute; top: 10px; right: 55px; z-index: 60; background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 35px; height: 35px; font-size: 1rem; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.8);">⚙️</button>
+
+      <h2 style="color: #c99c51; margin-bottom: 5px; font-size: 1.8rem; text-shadow: 0 2px 4px black; text-transform: uppercase;">FORZA 4</h2>
+      
+      <div style="text-align: center; color: white; font-weight: bold; margin-bottom: 10px; font-size: 0.85rem;">
+         Avversario: <span id="forza4-opponent-name" style="color: #ff4444;">In attesa...</span>
+      </div>
+
+      <div class="cards-hud" style="margin-bottom: 20px; text-align: center;">
+         <span id="forza4-turn-indicator" style="color: white; font-weight: bold; width: 100%;">Attesa...</span>
+      </div>
+
+      <!-- LA GRIGLIA -->
+      <div id="forza4-board" style="background: #1a2a5a; padding: 10px; border-radius: 12px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; box-shadow: 0 15px 40px rgba(0,0,0,0.9); border: 4px solid #2c4a8a; position: relative;">
+         <!-- Celle generate dal JS -->
+      </div>
+      
+      <div id="forza4-media-buttons" style="display: flex; gap: 5px; width: 100%; max-width: 400px; margin-top: 20px; padding: 0 10px;">
+        <button class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.7rem; min-height: 40px;" onclick="accendiMedia(false)">🎤 AUDIO</button>
+        <button class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.7rem; min-height: 40px;" onclick="accendiMedia(true)">📹 VIDEO</button>
+      </div>
+    </div>
 
     <!-- MENU MULTIPLAYER: CREA O SCEGLI STANZA -->
     <div id="multi-setup-menu" class="menu-screen" style="display: none">
@@ -2401,6 +2449,9 @@
         } else if (mode === "cards_menu") {
           document.getElementById("cards-setup-menu").style.display = "flex";
           if(typeof aggiornaOpzioniCarte === 'function') aggiornaOpzioniCarte();
+        } else if (mode === "forza4_menu") {
+          // 🔥 ECCO IL VIGILE CHE ORA RICONOSCE FORZA 4!
+          document.getElementById("forza4-setup-menu").style.display = "flex";
         } else {
           document.getElementById("multi-setup-menu").style.display = "flex";
           // 🔥 MOSTRA LE OPZIONI DELLE CARTE SOLO SE HAI SCELTO QUEL GIOCO
@@ -2422,6 +2473,7 @@
       function goBackMenu() {
         document.getElementById("bot-setup-menu").style.display = "none";
         if (document.getElementById("cards-setup-menu")) document.getElementById("cards-setup-menu").style.display = "none";
+        if (document.getElementById("forza4-setup-menu")) document.getElementById("forza4-setup-menu").style.display = "none"; // 🔥 CHIUDE FORZA 4
         if (document.getElementById("multi-setup-menu")) document.getElementById("multi-setup-menu").style.display = "none";
         if (document.getElementById("afk-setup-menu")) document.getElementById("afk-setup-menu").style.display = "none";
         document.getElementById("main-menu").style.display = "flex";
@@ -2677,6 +2729,13 @@
                 avviaPartitaCarte(roomData.tipoCarte, true, roomData); 
             }
             if (!myPeer) accendiMicrofono(); // Audio automatico
+          } else if (roomData.gioco === "forza4") {
+            // 🔥 MULTIPLAYER FORZA 4
+            document.getElementById("forza4-ui").style.display = "flex";
+            if (typeof avviaPartitaForza4 === "function") {
+                avviaPartitaForza4(true, roomData); 
+            }
+            if (!myPeer) accendiMicrofono();
           } else {
             // MULTIPLAYER CATANOPOLI
             document.getElementById("game-ui").style.display = "flex";
