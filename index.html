@@ -1225,11 +1225,12 @@
 
       <!-- HUD INFERIORE (AZIONI) -->
       <div style="width: 100%; background: #0a0e17; padding: 10px; border-top: 2px solid var(--border-color); z-index: 10; padding-bottom: 25px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-              <span style="color: white; font-weight: bold;">Truppe disp: <b id="risiko-truppe-disp" style="color: #44ff44; font-size: 1.2rem;">0</b> 🛵</span>
-              <span style="color: white; font-weight: bold;">Le tue Zone: <b id="risiko-zone-tue" style="color: #c99c51;">0</b> 🌍</span>
-          </div>
-          <div style="display: flex; gap: 10px;" id="risiko-azioni-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <span style="color: white; font-weight: bold; font-size: 0.9rem;">Truppe: <b id="risiko-truppe-disp" style="color: #44ff44; font-size: 1.2rem;">0</b> 🛵</span>
+            <button class="btn secondary" style="padding: 4px 10px; font-size: 0.75rem; border-color: #00bfff; color: #00bfff; border-radius: 20px;" onclick="if(typeof apriCarteRisiko === 'function') apriCarteRisiko()">🎴 CARTE (<b id="risiko-carte-count" style="color:white;">0</b>)</button>
+            <span style="color: white; font-weight: bold; font-size: 0.9rem;">Zone: <b id="risiko-zone-tue" style="color: #c99c51; font-size: 1.2rem;">0</b> 🌍</span>
+        </div>
+        <div style="display: flex; gap: 10px;" id="risiko-azioni-container">
               <button class="btn secondary" style="flex: 1; padding: 15px;" id="btn-risiko-azione1" disabled>ATTENDI</button>
               <button class="btn" style="flex: 1; padding: 15px; background: #bd2a2a; border-color: #7a1515;" id="btn-risiko-azione2" disabled>PASSA FASE</button>
           </div>
