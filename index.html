@@ -840,6 +840,7 @@
     <script src="motore-carte.js"></script>
     <script src="motore-forza4.js"></script>
     <script src="motore-taboo.js"></script>
+    <script src="motore-risiko.js"></script>
   </head>
   <body>
     <!-- BANNER INSTALLAZIONE APP -->
@@ -1023,6 +1024,18 @@
             <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="showSetup('afk')">☕ SALA AFK (VIP LOUNGE)</button>
           </div>
         </div>
+
+        <!-- GIOCO 5: RISIKO CATANESE -->
+        <div class="game-card">
+          <div style="font-size: 3rem; margin-bottom: 5px;">🌍</div>
+          <div class="game-title">RISIKO CATANESE</div>
+          <p class="game-desc">Conquista i quartieri di Catania e distruggi le armate avversarie! Strategia e dadi.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 15px;">
+            <button class="btn" style="font-size: 0.85rem; padding: 10px;" onclick="giocoSelezionato='risiko'; showSetup('risiko_menu')">👤 SINGLE PLAYER (BOT)</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #2c4a8a, #4a7acc);" onclick="giocoSelezionato='risiko'; showSetup('multi')">🌐 MULTIPLAYER ONLINE</button>
+          </div>
+        </div>
       </div>
 
       <!-- SEZIONE SOCIAL E AGENZIA -->
@@ -1172,6 +1185,63 @@
         <button class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.7rem; min-height: 40px;" onclick="accendiMedia(true)">📹 VIDEO</button>
       </div>
     </div>
+
+    <!-- ========================================== -->
+    <!-- MENU SETUP E UI DI RISIKO CATANESE         -->
+    <!-- ========================================== -->
+    <div id="risiko-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 20px; text-transform: uppercase;">La Guerra dei Quartieri</h2>
+      <div class="input-group">
+        <label>NUMERO AVVERSARI (BOT):</label>
+        <select id="risiko-setup-bots">
+          <option value="1">1 Zio Turi (1v1)</option>
+          <option value="2" selected>2 Bot (Tutti contro tutti)</option>
+          <option value="3">3 Bot (Guerra Totale)</option>
+        </select>
+      </div>
+      <button class="btn" style="max-width: 300px; margin-top: 20px" onclick="if(typeof avviaPartitaDaMenuRisiko === 'function') avviaPartitaDaMenuRisiko(); else alert('Caricamento motore Risiko in corso...');">AVVIA GUERRA</button>
+      <button class="btn secondary" style="max-width: 300px; margin-top: 10px" onclick="goBackMenu()">INDIETRO</button>
+    </div>
+
+    <div id="risiko-ui" style="display:none; flex-direction:column; align-items:center; justify-content:flex-start; height:100vh; width:100%; background:#141b29; position:relative; z-index:50;">
+      <!-- HUD SUPERIORE -->
+      <div style="width: 100%; background: #0a0e17; padding: 10px; border-bottom: 2px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; z-index: 10;">
+          <button class="btn-exit" style="position:relative; top:0; right:0;" onclick="if(typeof esciDaRisiko === 'function') esciDaRisiko(); else window.location.reload();">✖</button>
+          
+          <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
+              <span id="risiko-fase-titolo" style="color: #c99c51; font-weight: bold; font-size: 1.2rem; text-transform: uppercase;">INIZIALIZZAZIONE</span>
+              <span id="risiko-info-turno" style="color: white; font-size: 0.8rem;">Attesa giocatori...</span>
+          </div>
+
+          <button onclick="apriImpostazioni()" style="background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 35px; height: 35px; cursor: pointer; display: flex; justify-content: center; align-items: center;">⚙️</button>
+      </div>
+
+      <!-- MAPPA DI GIOCO (ZOOMABILE) -->
+      <div id="risiko-map-container" style="flex: 1; width: 100%; position: relative; overflow: auto; display: flex; justify-content: center; align-items: center; background: radial-gradient(circle, #2a3b5c, #0f121a);">
+          <div id="risiko-map" style="position: relative; width: 800px; height: 800px; transform: scale(0.45); transform-origin: center;">
+              <!-- I quartieri verranno iniettati qui da JS! -->
+          </div>
+      </div>
+
+      <!-- HUD INFERIORE (AZIONI) -->
+      <div style="width: 100%; background: #0a0e17; padding: 10px; border-top: 2px solid var(--border-color); z-index: 10; padding-bottom: 25px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+              <span style="color: white; font-weight: bold;">Truppe disp: <b id="risiko-truppe-disp" style="color: #44ff44; font-size: 1.2rem;">0</b> 🛵</span>
+              <span style="color: white; font-weight: bold;">Le tue Zone: <b id="risiko-zone-tue" style="color: #c99c51;">0</b> 🌍</span>
+          </div>
+          <div style="display: flex; gap: 10px;" id="risiko-azioni-container">
+              <button class="btn secondary" style="flex: 1; padding: 15px;" id="btn-risiko-azione1" disabled>ATTENDI</button>
+              <button class="btn" style="flex: 1; padding: 15px; background: #bd2a2a; border-color: #7a1515;" id="btn-risiko-azione2" disabled>PASSA FASE</button>
+          </div>
+          
+          <div id="risiko-media-buttons" style="display: none; gap: 5px; margin-top: 10px; justify-content: center;">
+            <button class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.7rem; padding: 8px;" onclick="accendiMedia(false)">🎤 AUDIO</button>
+            <button class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.7rem; padding: 8px;" onclick="accendiMedia(true)">📹 VIDEO</button>
+          </div>
+      </div>
+    </div>
+
+    <!-- MENU MULTIPLAYER: CREA O SCEGLI STANZA -->
 
     <!-- ========================================== -->
     <!-- UI TABOO SICILIANO (ONLINE)                -->
@@ -2522,11 +2592,12 @@
           document.getElementById("cards-setup-menu").style.display = "flex";
           if(typeof aggiornaOpzioniCarte === 'function') aggiornaOpzioniCarte();
         } else if (mode === "forza4_menu") {
-          // 🔥 ECCO IL VIGILE CHE ORA RICONOSCE FORZA 4!
           document.getElementById("forza4-setup-menu").style.display = "flex";
+        } else if (mode === "risiko_menu") {
+          // 🔥 IL VIGILE DEL RISIKO
+          document.getElementById("risiko-setup-menu").style.display = "flex";
         } else {
           document.getElementById("multi-setup-menu").style.display = "flex";
-          // 🔥 MOSTRA LE OPZIONI DELLE CARTE SOLO SE HAI SCELTO QUEL GIOCO
           let optCards = document.getElementById("multi-cards-options");
           let optCatanopoli = document.getElementById("multi-catanopoli-options");
           if(optCards) optCards.style.display = (window.giocoSelezionato === "carte") ? "block" : "none";
@@ -2545,7 +2616,8 @@
       function goBackMenu() {
         document.getElementById("bot-setup-menu").style.display = "none";
         if (document.getElementById("cards-setup-menu")) document.getElementById("cards-setup-menu").style.display = "none";
-        if (document.getElementById("forza4-setup-menu")) document.getElementById("forza4-setup-menu").style.display = "none"; // 🔥 CHIUDE FORZA 4
+        if (document.getElementById("forza4-setup-menu")) document.getElementById("forza4-setup-menu").style.display = "none"; 
+        if (document.getElementById("risiko-setup-menu")) document.getElementById("risiko-setup-menu").style.display = "none"; // 🔥 CHIUDE RISIKO
         if (document.getElementById("multi-setup-menu")) document.getElementById("multi-setup-menu").style.display = "none";
         if (document.getElementById("afk-setup-menu")) document.getElementById("afk-setup-menu").style.display = "none";
         document.getElementById("main-menu").style.display = "flex";
@@ -2814,6 +2886,13 @@
             if (typeof avviaPartitaTaboo === "function") {
                 avviaPartitaTaboo(roomData); 
             }
+          // 🔥 AGGIUNGI QUESTO PER RISIKO ONLINE:
+          } else if (roomData.gioco === "risiko") {
+            document.getElementById("risiko-ui").style.display = "flex";
+            if (typeof avviaPartitaRisiko === "function") {
+                avviaPartitaRisiko(true, roomData); 
+            }
+          // ===================================
           } else {
             // MULTIPLAYER CATANOPOLI
             document.getElementById("game-ui").style.display = "flex";
