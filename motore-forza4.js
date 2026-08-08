@@ -1,8 +1,7 @@
 // ==========================================
-// MOTORE FORZA 4 (TOTALITY GAMES) - V3 MULTIPLAYER ONLINE
+// MOTORE FORZA 4 (TOTALITY GAMES) - V4 MULTIPLAYER FIX DI RETE
 // ==========================================
 
-// Iniezione CSS per i Gettoni
 const styleF4 = document.createElement('style');
 styleF4.innerHTML = `
 .f4-col { display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
@@ -23,7 +22,7 @@ document.head.appendChild(styleF4);
 const ROWS = 6;
 const COLS = 7;
 let board = [];
-let turnoDiChiF4 = "p1"; // p1 (Rosso/Host), p2 (Giallo/Avversario)
+let turnoDiChiF4 = "p1"; // p1 (Rosso/Host), p2 (Giallo/Guest)
 let isMultiplayerF4 = false;
 let isHostF4 = false;
 let roomF4 = "";
@@ -50,20 +49,19 @@ window.avviaPartitaForza4 = function(isMulti, dati) {
     let fotoTag = fotoSrc ? `<img src="${fotoSrc}" style="width:28px; height:28px; border-radius:50%; vertical-align:middle; margin-right:5px; border:2px solid #bd2a2a; object-fit:cover;">` : `👤`;
 
     if (isMulti) {
-        // 🔥 FIX SUPREMO: Colleghiamo il nome della Stanza Globale di Socket.IO!
+        // 🔥 Il nome esatto della stanza da Socket.io!
         roomF4 = typeof myRoom !== 'undefined' ? myRoom : "StanzaSconosciuta";
         isHostF4 = (dati.hostId === socket.id);
         
         let opp = dati.players.find(p => p.id !== socket.id);
         nomeAvvF4 = opp ? opp.name : "Avversario";
         
-        // Assegno i colori in base a chi è Host
         let mioColore = isHostF4 ? "🔴" : "🟡";
         let suoColore = isHostF4 ? "🟡" : "🔴";
         
         document.getElementById("forza4-opponent-name").innerHTML = `${fotoTag} <b style="color:white;">${nomeUtente} (${mioColore})</b> vs <b style="color:#d1b438;">${nomeAvvF4} (${suoColore})</b>`;
         
-        // Pulisci listener vecchi
+        // 🌐 ASCIOLTO I PACCHETTI DELLA RETE 🌐
         socket.off("riceviF4SyncInit");
         socket.on("riceviF4SyncInit", (data) => {
             if (!isHostF4) {
@@ -74,12 +72,13 @@ window.avviaPartitaForza4 = function(isMulti, dati) {
 
         socket.off("riceviF4Mossa");
         socket.on("riceviF4Mossa", (data) => {
+            // Un gettone è caduto nello schermo dell'avversario: lo replico qua!
             eseguiMossa(data.col, data.giocatore);
         });
         
         socket.off("riceviF4Restart");
         socket.on("riceviF4Restart", () => {
-            resettaPartitaF4(false); // Il restart ricevuto dalla rete
+            resettaPartitaF4(false); 
         });
 
         socket.off("playerLeft");
@@ -109,7 +108,6 @@ function inizializzaBoardF4() {
     
     disegnaBoardF4();
 
-    // Se sono io l'Host, distribuisco il tabellone pulito a tutti!
     if (isMultiplayerF4 && isHostF4) {
         socket.emit("f4SyncInit", { room: roomF4, board: board, turno: turnoDiChiF4 });
     }
@@ -162,20 +160,20 @@ function giocaColonna(col) {
     
     if (isMultiplayerF4) {
         let mioTurno = (isHostF4 && turnoDiChiF4 === "p1") || (!isHostF4 && turnoDiChiF4 === "p2");
-        if (!mioTurno) {
-            console.log("Non è il tuo turno!"); // Blocco sicurezza antispam
-            return; 
-        }
+        if (!mioTurno) return; // Blocco anti-spam
         
-        // Se la mossa è valida, aggiorniamo il gioco e la SPEDIAMO!
-        if (eseguiMossa(col, turnoDiChiF4)) {
-            socket.emit("f4Mossa", { room: roomF4, col: col, giocatore: (isHostF4 ? "p1" : "p2") });
+        // Determino chi sono in modo fisso per questa mossa
+        let chiGioca = isHostF4 ? "p1" : "p2";
+        
+        // Se la mossa è valida, aggiorniamo il gioco e la SPEDIAMO al Server! 🚀
+        if (eseguiMossa(col, chiGioca)) {
+            socket.emit("f4Mossa", { room: roomF4, col: col, giocatore: chiGioca });
         }
     } else {
         if (turnoDiChiF4 !== "p1") return;
         if (eseguiMossa(col, "p1")) {
             if (!gameOverF4) {
-                turnoDiChiF4 = "p2";
+                turnoDiChiF4 = "p2"; // Passa il turno al Bot
                 aggiornaUIF4();
                 setTimeout(faiMossaBot, 800);
             }
@@ -193,10 +191,10 @@ function eseguiMossa(col, giocatore) {
         }
     }
     
-    if (rowPlaced === -1) return false; // Colonna piena, mossa non valida
+    if (rowPlaced === -1) return false; 
     
     if(typeof window.suonaEffetto === 'function') { try { window.suonaEffetto('dadi'); } catch(e){} }
-    disegnaBoardF4(); // Ridisegna graficamente
+    disegnaBoardF4(); 
     
     let winCells = controllaVittoriaF4(rowPlaced, col, giocatore);
     if (winCells) {
@@ -226,6 +224,7 @@ function eseguiMossa(col, giocatore) {
         return true;
     }
     
+    // Inverti Turno!
     turnoDiChiF4 = (giocatore === "p1") ? "p2" : "p1";
     aggiornaUIF4();
     return true;
@@ -279,7 +278,7 @@ window.esciDaForza4 = function() {
 // IA BOT (FORZA 4)
 // ==========================
 function faiMossaBot() {
-    if(gameOverF4) return;
+    if(gameOverF4 || isMultiplayerF4) return;
 
     let availableCols = [];
     for(let c=0; c<COLS; c++) {
