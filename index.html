@@ -852,6 +852,12 @@
 
     <div id="audio-container" style="display: none"></div>
 
+    <!-- 🔥 TASTI FLUTTUANTI PER MUTARE MIC E CAM IN QUALSIASI GIOCO -->
+    <div id="global-media-controls" style="display:none; position:fixed; bottom:20px; right:20px; z-index:9999; flex-direction:column; gap:10px;">
+        <button id="btn-toggle-cam" onclick="toggleTelecamera()" style="width:50px; height:50px; border-radius:50%; background:#3b7a3b; border:2px solid white; color:white; font-size:1.4rem; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center;">📹</button>
+        <button id="btn-toggle-mic" onclick="toggleMuto()" style="width:50px; height:50px; border-radius:50%; background:#3b7a3b; border:2px solid white; color:white; font-size:1.4rem; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.8); display:flex; justify-content:center; align-items:center;">🎤</button>
+    </div>
+
     <!-- SCHERMATA ACCESSO / REGISTRAZIONE -->
     <div id="auth-menu" class="menu-screen">
       <img src="logo-catanopoli.png" alt="Logo" class="menu-logo" id="auth-logo-img" />
@@ -4319,6 +4325,38 @@
           });
       };
 
+      // 🔥 FUNZIONI PER ZITTIRE AUDIO E SPEGNERE VIDEO 🔥
+      window.toggleMuto = function() {
+          if(myAudioStream) {
+              let audioTrack = myAudioStream.getAudioTracks()[0];
+              if(audioTrack) {
+                  audioTrack.enabled = !audioTrack.enabled;
+                  let btn = document.getElementById("btn-toggle-mic");
+                  if(btn) {
+                      btn.style.background = audioTrack.enabled ? "#3b7a3b" : "#bd2a2a";
+                      btn.innerHTML = audioTrack.enabled ? "🎤" : "🔇";
+                  }
+              }
+          }
+      };
+
+      window.toggleTelecamera = function() {
+          if(myAudioStream) {
+              let videoTrack = myAudioStream.getVideoTracks()[0];
+              if(videoTrack) {
+                  videoTrack.enabled = !videoTrack.enabled;
+                  let btn = document.getElementById("btn-toggle-cam");
+                  if(btn) {
+                      btn.style.background = videoTrack.enabled ? "#3b7a3b" : "#bd2a2a";
+                      btn.innerHTML = videoTrack.enabled ? "📹" : "🚫";
+                  }
+              } else {
+                  // Se non c'era proprio il video, riavviamo con la cam accesa!
+                  accendiMedia(true);
+              }
+          }
+      };
+
       window.accendiMedia = function(conVideo = false) {
         if (myPeer) { 
           for (let conns in myPeer.connections) {
@@ -4329,7 +4367,6 @@
         }
         if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
 
-        // 🔥 NESSUNA FORZATURA STRANA: Lasciamo che lo Xiaomi e la rete scelgano il formato migliore
         let mediaConstraints = conVideo 
           ? { video: { facingMode: "user" }, audio: true } 
           : { audio: true, video: false };
@@ -4337,6 +4374,18 @@
         navigator.mediaDevices.getUserMedia(mediaConstraints)
           .then(function (stream) {
             myAudioStream = stream;
+
+            // FAI SPUNTARE I TASTI FLUTTUANTI
+            let gmc = document.getElementById("global-media-controls");
+            if(gmc) gmc.style.display = "flex";
+            
+            let bMic = document.getElementById("btn-toggle-mic");
+            if(bMic) { bMic.style.background = "#3b7a3b"; bMic.innerHTML = "🎤"; }
+            let bCam = document.getElementById("btn-toggle-cam");
+            if(bCam) { 
+               bCam.style.background = conVideo ? "#3b7a3b" : "#bd2a2a"; 
+               bCam.innerHTML = conVideo ? "📹" : "🚫"; 
+            }
 
             let btnAudio = document.getElementById("btn-afk-audio");
             let btnVideo = document.getElementById("btn-afk-video");
