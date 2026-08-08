@@ -1427,6 +1427,26 @@
       <div class="modal-content" id="modal-content"></div>
     </div>
 
+    <!-- 🔥 POPUP DI SISTEMA PERSONALIZZATI (ADDIO ALERT BRUTTI) 🔥 -->
+    <div id="custom-alert-box" class="modal-overlay" style="z-index: 10000;">
+      <div class="modal-content" style="max-width: 350px; text-align: center;">
+        <h3 style="color: #c99c51; border-bottom: 1px solid #c99c51; padding-bottom: 10px;">Avviso</h3>
+        <p id="custom-alert-text" style="font-size: 1rem; margin: 20px 0; color: white;"></p>
+        <button class="btn" style="width: 100%;" onclick="document.getElementById('custom-alert-box').style.display='none'">OK</button>
+      </div>
+    </div>
+
+    <div id="custom-confirm-box" class="modal-overlay" style="z-index: 10000;">
+      <div class="modal-content" style="max-width: 350px; text-align: center;">
+        <h3 style="color: #bd2a2a; border-bottom: 1px solid #bd2a2a; padding-bottom: 10px;">Attenzione</h3>
+        <p id="custom-confirm-text" style="font-size: 1rem; margin: 20px 0; color: white;"></p>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a;" id="btn-custom-confirm-yes">SI</button>
+          <button class="btn secondary" style="flex: 1; color: #bd2a2a; border-color: #bd2a2a;" onclick="document.getElementById('custom-confirm-box').style.display='none'">NO</button>
+        </div>
+      </div>
+    </div>
+
     <!-- MENU SALA AFK DIRETTA DAL MENU PRINCIPALE -->
     <div id="afk-setup-menu" class="menu-screen" style="display: none">
       <h2 style="color: var(--border-color); margin-bottom: 10px; font-size: 2rem;">☕ VIP Lounge</h2>
@@ -2517,9 +2537,9 @@
       }
 
       window.esciDaTavoloCarte = function() {
-        if (confirm("Vuoi abbandonare il tavolo e tornare al Menu?")) {
-           quitGame(); // Chiude tutto in modo pulito e torna alla home!
-        }
+        customConfirm("Vuoi abbandonare il tavolo e tornare al Menu?", function() {
+           quitGame(); 
+        });
       };
 
       function goBackMenu() {
@@ -4508,52 +4528,48 @@
       }
 
       window.dichiaraBancarottaManuale = function () {
-        if (
-          !confirm(
-            "Sei sicuro di voler dichiarare bancarotta e ritirarti dalla partita?"
-          )
-        )
-          return;
-        bloccaTimer();
-        let mioP = players.find(function (pl) {
-          return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+        customConfirm("Sei sicuro di voler dichiarare bancarotta e ritirarti dalla partita?", function() {
+            bloccaTimer();
+            let mioP = players.find(function (pl) {
+              return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+            });
+            if (!mioP || mioP.bankrupt) return;
+
+            mioP.bankrupt = true;
+            mioP.money = -1; 
+
+            Object.keys(properties).forEach(function (k) {
+              if (String(properties[k].owner) === String(mioP.id)) {
+                properties[k].owner = null;
+                properties[k].houses = 0;
+                let tile = document.getElementById("tile-" + k);
+                if (tile) tile.style.boxShadow = "none";
+                let badge = tile ? tile.querySelector(".property-badge") : null;
+                if (badge) badge.remove();
+              }
+            });
+            updateTokens();
+
+            let msg = "🏳️ <b>" + mioP.name + " SI È ARRESO (BANCAROTTA)!</b>";
+            document.getElementById("game-log").innerHTML = msg;
+
+            if (gameMode === "multi" && socket) {
+              socket.emit("syncAction", {
+                room: myRoom,
+                players: players,
+                properties: properties,
+                logMsg: msg,
+              });
+              setTimeout(function () {
+                socket.emit("endTurn", { room: myRoom });
+              }, 2000);
+            } else {
+              setTimeout(function () {
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+                startTurnFlow();
+              }, 2000);
+            }
         });
-        if (!mioP || mioP.bankrupt) return;
-
-        mioP.bankrupt = true;
-        mioP.money = -1; // Per sicurezza
-
-        Object.keys(properties).forEach(function (k) {
-          if (String(properties[k].owner) === String(mioP.id)) {
-            properties[k].owner = null;
-            properties[k].houses = 0;
-            let tile = document.getElementById("tile-" + k);
-            if (tile) tile.style.boxShadow = "none";
-            let badge = tile ? tile.querySelector(".property-badge") : null;
-            if (badge) badge.remove();
-          }
-        });
-        updateTokens();
-
-        let msg = "🏳️ <b>" + mioP.name + " SI È ARRESO (BANCAROTTA)!</b>";
-        document.getElementById("game-log").innerHTML = msg;
-
-        if (gameMode === "multi" && socket) {
-          socket.emit("syncAction", {
-            room: myRoom,
-            players: players,
-            properties: properties,
-            logMsg: msg,
-          });
-          setTimeout(function () {
-            socket.emit("endTurn", { room: myRoom });
-          }, 2000);
-        } else {
-          setTimeout(function () {
-            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
-            startTurnFlow();
-          }, 2000);
-        }
       };
 
       window.addEventListener("resize", function () {
@@ -4585,6 +4601,22 @@
           navigator.serviceWorker.register('sw.js');
         });
       }
+
+      // 🔥 MAGIA: INTERCETTIAMO TUTTI GLI ALERT E I CONFIRM DEL TELEFONO! 🔥
+      window.alert = function(msg) {
+          document.getElementById("custom-alert-text").innerHTML = String(msg).replace(/\n/g, "<br>");
+          document.getElementById("custom-alert-box").style.display = "flex";
+      };
+
+      window.customConfirm = function(msg, onYes) {
+          document.getElementById("custom-confirm-text").innerHTML = String(msg).replace(/\n/g, "<br>");
+          document.getElementById("custom-confirm-box").style.display = "flex";
+          let btnYes = document.getElementById("btn-custom-confirm-yes");
+          btnYes.onclick = function() {
+              document.getElementById("custom-confirm-box").style.display = "none";
+              if(onYes) onYes();
+          };
+      };
     </script>
   </body>
 </html>
