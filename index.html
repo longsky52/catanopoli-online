@@ -839,6 +839,7 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="motore-carte.js"></script>
     <script src="motore-forza4.js"></script>
+    <script src="motore-taboo.js"></script>
   </head>
   <body>
     <!-- BANNER INSTALLAZIONE APP -->
@@ -991,14 +992,17 @@
           </div>
         </div>
 
-        <!-- GIOCO 3: TABOO -->
-        <div class="game-card locked">
+        <!-- GIOCO 3: TABOO SICILIANO (SBLOCCATO!) -->
+        <div class="game-card">
           <div style="margin-bottom: 5px;">
-            <img src="taboo-icon.png" alt="Taboo" style="height: 60px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-            <span style="font-size: 3rem; display:none;">🗣️</span>
+            <span style="font-size: 3rem;">🗣️</span>
           </div>
           <div class="game-title">TABOO SICILIANO</div>
-          <p class="game-desc">Fai indovinare la parola alla tua squadra senza usare le parole vietate. In videochat!</p>
+          <p class="game-desc">Fai indovinare la parola alla tua squadra senza usare le parole vietate. Solo in Videochat!</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 15px;">
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="giocoSelezionato='taboo'; showSetup('multi')">🌐 CREA/UNISCITI A STANZA TABOO</button>
+          </div>
         </div>
 
         <!-- GIOCO 4: FORZA 4 -->
@@ -1161,6 +1165,47 @@
         <button class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.7rem; min-height: 40px;" onclick="accendiMedia(false)">🎤 AUDIO</button>
         <button class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.7rem; min-height: 40px;" onclick="accendiMedia(true)">📹 VIDEO</button>
       </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- UI TABOO SICILIANO (ONLINE)                -->
+    <!-- ========================================== -->
+    <div id="taboo-ui" style="display:none; flex-direction:column; align-items:center; justify-content:flex-start; padding-top: 60px; height:100vh; width:100%; background:radial-gradient(circle, #4a148c, #1a0033); position:relative; z-index:50;">
+      <button class="btn-exit" onclick="if(typeof esciDaTaboo === 'function') esciDaTaboo(); else window.location.reload();">✖</button>
+      
+      <h2 style="color: #ffdf00; margin-bottom: 5px; font-size: 1.8rem; text-shadow: 0 2px 4px black; text-transform: uppercase;">TABOO SICILIANO</h2>
+      <p style="color: white; font-size: 0.85rem; margin-bottom: 10px;">La Videochat è attiva! 📹</p>
+
+      <!-- 📺 L'AREA DOVE INIETTEREMO LA GRIGLIA VIDEO AUTOMATICAMENTE -->
+      <div id="taboo-video-area" style="width: 100%; max-width: 500px; min-height: 140px; margin-bottom: 15px; padding: 0 10px;"></div>
+
+      <!-- 🎴 LA CARTA DEL TABOO -->
+      <div id="taboo-card-container" style="background: #fdf5e6; width: 280px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 4px solid #d81b60; display:flex; flex-direction:column; overflow:hidden; position: relative;">
+          <div style="background: #d81b60; color: white; padding: 15px; text-align: center; font-size: 1.8rem; font-weight: bold; border-bottom: 3px solid black; text-shadow: 0 2px 4px rgba(0,0,0,0.5);" id="taboo-word">CLICCA START</div>
+          <div style="padding: 15px; display:flex; flex-direction:column; gap: 8px; align-items:center; background: #fff;">
+             <div style="color: #555; font-size: 1.1rem; font-weight:bold;">❌ PAROLE VIETATE ❌</div>
+             <hr style="width:80%; border:1px solid #ccc; margin:5px 0;">
+             <div id="taboo-forbidden-words" style="display:flex; flex-direction:column; align-items:center; gap:5px;">
+                 <span style="font-size:1.4rem; color:#bd2a2a; font-weight:bold;">???</span>
+                 <span style="font-size:1.4rem; color:#bd2a2a; font-weight:bold;">???</span>
+                 <span style="font-size:1.4rem; color:#bd2a2a; font-weight:bold;">???</span>
+                 <span style="font-size:1.4rem; color:#bd2a2a; font-weight:bold;">???</span>
+                 <span style="font-size:1.4rem; color:#bd2a2a; font-weight:bold;">???</span>
+             </div>
+          </div>
+      </div>
+
+      <!-- ⏱️ TIMER E CONTROLLI -->
+      <div style="margin-top: 15px; font-size: 3rem; font-weight:bold; color: #ffdf00; text-shadow: 0 4px 8px black;" id="taboo-timer">60</div>
+      
+      <div style="display:flex; gap: 10px; margin-top: 10px; width: 100%; max-width: 350px; padding: 0 15px;">
+         <button class="btn" style="flex:1; background: #3b7a3b; border-color:#2a5a2a;" onclick="if(typeof tabooIndovinata === 'function') tabooIndovinata()" id="btn-taboo-ok" disabled>✅ ESATTO</button>
+         <button class="btn" style="flex:1; background: #bd2a2a; border-color:#7a1515;" onclick="if(typeof tabooErrore === 'function') tabooErrore()" id="btn-taboo-err" disabled>❌ TABOO!</button>
+      </div>
+      <button class="btn" style="width:calc(100% - 30px); max-width: 350px; margin-top: 15px; background: #c99c51; color: black;" onclick="if(typeof iniziaTurnoTaboo === 'function') iniziaTurnoTaboo()" id="btn-taboo-start">▶️ INIZIA IL MIO TURNO</button>
+      
+      <!-- 🏆 PUNTEGGIO -->
+      <div style="color: white; font-weight: bold; margin-top: 20px; font-size: 1.2rem; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 8px;">Carte Indovinate: <span id="taboo-score" style="color: #ffdf00;">0</span></div>
     </div>
 
     <!-- MENU MULTIPLAYER: CREA O SCEGLI STANZA -->
@@ -2736,6 +2781,12 @@
                 avviaPartitaForza4(true, roomData); 
             }
             if (!myPeer) accendiMicrofono();
+          } else if (roomData.gioco === "taboo") {
+            // 🔥 MULTIPLAYER TABOO
+            document.getElementById("taboo-ui").style.display = "flex";
+            if (typeof avviaPartitaTaboo === "function") {
+                avviaPartitaTaboo(roomData); 
+            }
           } else {
             // MULTIPLAYER CATANOPOLI
             document.getElementById("game-ui").style.display = "flex";
