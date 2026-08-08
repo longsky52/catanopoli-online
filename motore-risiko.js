@@ -1,6 +1,6 @@
 // ==========================================
-// MOTORE RISIKO CATANESE (TOTALITY GAMES) - V3
-// Mappa Sfondo, Carte Speciali, Combo Tris!
+// MOTORE RISIKO CATANESE (TOTALITY GAMES) - V3.1
+// Mappa Allargata, Fix Testi e Carte Speciali
 // ==========================================
 
 const styleRisiko = document.createElement('style');
@@ -8,11 +8,9 @@ styleRisiko.innerHTML = `
     #risiko-map-container {
         position: relative;
         background-color: #0a0e17;
-        /* Ombra ai bordi della finestra */
         box-shadow: inset 0 0 50px rgba(0,0,0,0.9);
         overflow: hidden !important; 
     }
-    /* 🔥 IL TUO SFONDO CARICATO (L'IMMAGINE CHE HAI NELLA CARTELLA) 🔥 */
     #risiko-map-container::before {
         content: '';
         position: absolute;
@@ -20,25 +18,24 @@ styleRisiko.innerHTML = `
         background-image: url('mappa-catania.jpg');
         background-size: cover;
         background-position: center;
-        /* Questo filtro la rende scura e "drammatica", perfetta per far risaltare i pallini colorati! */
         filter: brightness(0.3) contrast(1.2) grayscale(0.5); 
         pointer-events: none;
         z-index: 0;
     }
     #risiko-map {
-        z-index: 1; /* Assicura che la mappa con i nodi stia SOPRA lo sfondo */
+        z-index: 1; 
     }
     
-    .r-node {
+   .r-node {
         position: absolute;
-        width: clamp(70px, 12vw, 90px); height: clamp(70px, 12vw, 90px);
+        width: clamp(50px, 9vw, 65px); height: clamp(50px, 9vw, 65px); /* PIÙ PICCOLI! */
         border-radius: 50%;
         background: #222;
-        border: 4px solid #fff;
+        border: 3px solid #fff; /* Bordo leggermente più fine */
         transform: translate(-50%, -50%);
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
-        cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.9), inset 0 0 15px rgba(0,0,0,0.5);
+        cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.9), inset 0 0 10px rgba(0,0,0,0.5);
         transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
         z-index: 2;
     }
@@ -47,13 +44,17 @@ styleRisiko.innerHTML = `
     .r-node.target { border-color: #ff4444; box-shadow: 0 0 30px #ff4444; animation: pulseTarget 1s infinite; cursor: crosshair; }
     
     .r-node-name {
-        position: absolute; top: -30px;
-        background: rgba(0,0,0,0.95); padding: 4px 8px;
-        border-radius: 6px; color: white; font-size: 1rem; font-weight: bold;
-        white-space: nowrap; pointer-events: none; border: 2px solid #555;
+        position: absolute; top: -22px; /* Etichetta più vicina al pallino */
+        background: rgba(0,0,0,0.95); padding: 2px 6px;
+        border-radius: 4px; color: white; font-size: 0.8rem; /* Font più piccolo */
+        font-weight: bold;
+        white-space: nowrap; pointer-events: none; border: 1px solid #555;
     }
-    .r-node-troops { font-size: 2rem; font-weight: bold; color: white; text-shadow: 0 3px 6px black; pointer-events: none; display: flex; align-items: center; gap: 5px; }
-    
+.r-node-troops { 
+        font-size: 1.4rem; /* Numeri e motoretti rimpiccioliti */
+        font-weight: bold; color: white; text-shadow: 0 2px 4px black; 
+        pointer-events: none; display: flex; align-items: center; gap: 3px; 
+    }
     @keyframes pulseTarget { 0% { transform: translate(-50%, -50%) scale(1); filter: brightness(1); } 50% { transform: translate(-50%, -50%) scale(1.15); filter: brightness(1.5); } 100% { transform: translate(-50%, -50%) scale(1); filter: brightness(1); } }
     
     /* MODAL BATTAGLIA E CARTE */
@@ -69,8 +70,7 @@ styleRisiko.innerHTML = `
 `;
 document.head.appendChild(styleRisiko);
 
-// I TIPI DI CARTE
-const TIPI_CARTA = ["🛵", "🛺", "🐘"]; // Motorino(Fante), Lapa(Cavaliere), Liotru(Cannone)
+const TIPI_CARTA = ["🛵", "🛺", "🐘"]; 
 let mazzoRisiko = [];
 
 const R_OBIETTIVI = [
@@ -89,26 +89,31 @@ const R_ZONES = {
     "etnei": { color: "#3b7a3b" }   
 };
 
+// 🔥 NODI ABBASSATI E DISTANZIATI PER NON COPRIRSI 🔥
 const R_NODES = {
-    "duomo": { nome: "P.zza Duomo", zona: "centro", x: 50, y: 65, links: ["stesicoro", "playa", "licuti"] },
-    "stesicoro": { nome: "Stesicoro", zona: "centro", x: 50, y: 45, links: ["duomo", "borgo", "cibali", "ognina"] },
-    "borgo": { nome: "Il Borgo", zona: "centro", x: 45, y: 25, links: ["stesicoro", "cibali", "misterbianco", "trecastagni"] },
-    "cibali": { nome: "Cibali", zona: "centro", x: 30, y: 40, links: ["stesicoro", "borgo", "zialisa", "misterbianco"] },
+    // CENTRO
+    "duomo": { nome: "P.zza Duomo", zona: "centro", x: 50, y: 70, links: ["stesicoro", "playa", "licuti"] },
+    "stesicoro": { nome: "Stesicoro", zona: "centro", x: 50, y: 50, links: ["duomo", "borgo", "cibali", "ognina"] },
+    "borgo": { nome: "Il Borgo", zona: "centro", x: 45, y: 30, links: ["stesicoro", "cibali", "misterbianco", "trecastagni"] },
+    "cibali": { nome: "Cibali", zona: "centro", x: 30, y: 45, links: ["stesicoro", "borgo", "zialisa", "misterbianco"] },
     
-    "playa": { nome: "La Playa", zona: "sud", x: 50, y: 85, links: ["duomo", "zialisa", "goretti"] },
-    "zialisa": { nome: "Zia Lisa", zona: "sud", x: 30, y: 70, links: ["playa", "librino", "cibali"] },
-    "librino": { nome: "Librino", zona: "sud", x: 15, y: 65, links: ["zialisa", "goretti", "misterbianco"] },
-    "goretti": { nome: "Vill. Goretti", zona: "sud", x: 25, y: 90, links: ["playa", "librino"] },
+    // SUD
+    "playa": { nome: "La Playa", zona: "sud", x: 50, y: 88, links: ["duomo", "zialisa", "goretti"] },
+    "zialisa": { nome: "Zia Lisa", zona: "sud", x: 30, y: 78, links: ["playa", "librino", "cibali"] },
+    "librino": { nome: "Librino", zona: "sud", x: 10, y: 75, links: ["zialisa", "goretti", "misterbianco"] },
+    "goretti": { nome: "Vill. Goretti", zona: "sud", x: 25, y: 92, links: ["playa", "librino"] },
 
-    "licuti": { nome: "S.G. Li Cuti", zona: "costa", x: 70, y: 65, links: ["duomo", "ognina"] },
-    "ognina": { nome: "Ognina", zona: "costa", x: 80, y: 50, links: ["licuti", "acicastello", "stesicoro"] },
-    "acicastello": { nome: "Acicastello", zona: "costa", x: 90, y: 35, links: ["ognina", "acitrezza", "trecastagni"] },
-    "acitrezza": { nome: "Acitrezza", zona: "costa", x: 95, y: 15, links: ["acicastello", "zafferana"] },
+    // COSTA
+    "licuti": { nome: "S.G. Li Cuti", zona: "costa", x: 70, y: 72, links: ["duomo", "ognina"] },
+    "ognina": { nome: "Ognina", zona: "costa", x: 85, y: 55, links: ["licuti", "acicastello", "stesicoro"] },
+    "acicastello": { nome: "Acicastello", zona: "costa", x: 95, y: 40, links: ["ognina", "acitrezza", "trecastagni"] },
+    "acitrezza": { nome: "Acitrezza", zona: "costa", x: 95, y: 20, links: ["acicastello", "zafferana"] },
 
-    "misterbianco": { nome: "Misterbianco", zona: "etnei", x: 15, y: 30, links: ["cibali", "borgo", "librino", "paterno"] },
-    "paterno": { nome: "Paternò", zona: "etnei", x: 5, y: 10, links: ["misterbianco"] },
-    "trecastagni": { nome: "Trecastagni", zona: "etnei", x: 65, y: 15, links: ["borgo", "acicastello", "zafferana"] },
-    "zafferana": { nome: "Zafferana", zona: "etnei", x: 80, y: 5, links: ["trecastagni", "acitrezza"] }
+    // ETNEI
+    "misterbianco": { nome: "Misterbianco", zona: "etnei", x: 10, y: 40, links: ["cibali", "borgo", "librino", "paterno"] },
+    "paterno": { nome: "Paternò", zona: "etnei", x: 15, y: 15, links: ["misterbianco"] },
+    "trecastagni": { nome: "Trecastagni", zona: "etnei", x: 65, y: 20, links: ["borgo", "acicastello", "zafferana"] },
+    "zafferana": { nome: "Zafferana", zona: "etnei", x: 80, y: 10, links: ["trecastagni", "acitrezza"] }
 };
 
 let rPlayers = [];
@@ -117,7 +122,7 @@ let rFase = 0;
 let rTruppeDaPiazzare = 0;
 let rNodeSelected = null;
 let isMultiplayerRisiko = false;
-let haConquistatoTerritorio = false; // Flag per pescare la carta a fine turno!
+let haConquistatoTerritorio = false;
 
 window.avviaPartitaDaMenuRisiko = function() {
     let numBots = parseInt(document.getElementById("risiko-setup-bots").value);
@@ -158,14 +163,6 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
         </div>
     `;
     document.getElementById("risiko-ui").appendChild(containerModals);
-
-    let topBar = document.getElementById("risiko-fase-titolo").parentNode.parentNode;
-    let objBtn = document.createElement("button");
-    objBtn.innerHTML = "🎯 OBIETTIVO";
-    objBtn.className = "btn secondary";
-    objBtn.style = "position:absolute; top:10px; left:50px; font-size:0.7rem; padding:8px; border-color:#ffdf00; color:#ffdf00;";
-    if(typeof window.alert === 'function') objBtn.onclick = () => window.alert("IL TUO OBIETTIVO SEGRETO:\n\n" + mioObiettivo);
-    topBar.appendChild(objBtn);
 
     // Disegna Linee Mappa
     let svg = document.getElementById("risiko-svg");
@@ -221,7 +218,10 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
         for(let i=0; i<dati.bots; i++) {
             rPlayers.push({ id: "b"+i, name: nomiBot[i], color: rColors[i+1], isBot: true, cards: [] });
         }
-        if(typeof window.alert === 'function') setTimeout(() => window.alert("IL TUO OBIETTIVO SEGRETO:\n\n" + mioObiettivo), 500);
+        
+        // 🔥 FIX TESTO: USIAMO <br> PER I RITORNI A CAPO NEL POPUP! 🔥
+        if(typeof window.alert === 'function') setTimeout(() => window.alert("IL TUO OBIETTIVO SEGRETO:<br><br>" + mioObiettivo), 500);
+        
         distribuisciTerritoriIniziali();
         iniziaTurnoRisiko(0);
     }
@@ -234,7 +234,7 @@ function creaMazzo() {
     });
     mazzoRisiko.push({ tipo: "🃏", terr: "JOLLY" });
     mazzoRisiko.push({ tipo: "🃏", terr: "JOLLY" });
-    mazzoRisiko.sort(() => Math.random() - 0.5); // Mescola
+    mazzoRisiko.sort(() => Math.random() - 0.5); 
 }
 
 function pescaCartaRisiko(player) {
@@ -243,7 +243,8 @@ function pescaCartaRisiko(player) {
         player.cards.push(carta);
         if(!player.isBot) {
             document.getElementById("risiko-carte-count").innerText = player.cards.length;
-            if(typeof window.alert === 'function') window.alert(`🎴 Hai conquistato un territorio e hai pescato una carta!\n\n${carta.terr} - ${carta.tipo}`);
+            // 🔥 FIX TESTO
+            if(typeof window.alert === 'function') window.alert(`🎴 Hai conquistato un territorio e hai pescato una carta!<br><br>${carta.terr} - ${carta.tipo}`);
         }
     }
 }
@@ -264,7 +265,6 @@ window.apriCarteRisiko = function() {
             </div>
         `).join("");
         
-        // Controlla se ha un Tris (Semplificato: se hai >= 3 carte per ora ti lascia provare a cliccare)
         if(p.cards.length >= 3 && rFase === 0 && rTurnoIndex === 0) {
             document.getElementById("btn-scambia-carte").style.display = "block";
         } else {
@@ -280,9 +280,7 @@ window.chiudiCarteRisiko = function() {
 
 window.scambiaCarte = function() {
     let p = rPlayers[0];
-    // LOGICA SEMPLIFICATA DI SCAMBIO: Per ora diamo un bonus fisso di 8 armate se cede 3 carte qualsiasi
-    // Nello step multiplayer inseriremo il controllo specifico dei tris.
-    p.cards.splice(0, 3); // Rimuove le prime 3 carte
+    p.cards.splice(0, 3); 
     rTruppeDaPiazzare += 8;
     if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('cassa'); }catch(e){}
     document.getElementById("risiko-carte-count").innerText = p.cards.length;
@@ -393,7 +391,6 @@ function impostaFaseRisiko(fase) {
     
     info.innerHTML = isMyTurn ? "<b style='color:#44ff44;'>Tocca a te! Clicca sulla mappa.</b>" : `Turno di <b style='color:${p.color};'>${p.name}</b>`;
     
-    // Aggancio il bottone 2 (Passa Fase) alla nuova funzione che blocca se non hai piazzato le truppe
     btn2.onclick = passaFaseManuale;
 
     if(fase === 0) {
@@ -427,7 +424,6 @@ window.clickNodoRisiko = function(id) {
             if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('cassa'); }catch(e){}
             aggiornaMappaRisiko();
             if(rTruppeDaPiazzare === 0) {
-                // Non auto-passa più, aspetta che clicchi il tasto rosso per evitare click sbagliati!
                 document.getElementById("btn-risiko-azione1").innerText = "PRONTO PER ATTACCARE";
             } else {
                 document.getElementById("btn-risiko-azione1").innerText = `PIAZZA ${rTruppeDaPiazzare} 🛵`;
@@ -497,9 +493,9 @@ function avviaBattagliaAnimata(attId, defId) {
                 if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('vittoria'); }catch(e){}
                 rNodeSelected = null;
                 
-                // 🔥 HA CONQUISTATO! Alla fine del turno prenderà una carta!
                 haConquistatoTerritorio = true; 
             } else {
+                // 🔥 FIX TESTO
                 resText.innerHTML = `L'Attaccante perde ${armatePerseAtt} 🛵<br>La Difesa perde ${armatePerseDef} 🛵`;
                 if(nAtt.troops === 1) rNodeSelected = null; 
             }
@@ -518,7 +514,6 @@ function eseguiTurnoBot(bot) {
     haConquistatoTerritorio = false;
     let mieZone = Object.keys(R_NODES).filter(k => R_NODES[k].owner === bot.id);
     
-    // Se ha 3 carte le gioca in automatico
     if(bot.cards.length >= 3) {
         bot.cards.splice(0, 3);
         rTruppeDaPiazzare += 8;
