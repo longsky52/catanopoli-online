@@ -4412,7 +4412,8 @@
 
           stream.oninactive = function() { distruggiVideo(peerId); };
 
-          if (myRoom.includes("[AFK]")) {
+          // 🔥 FIX MAGICO: Ora la videocamera si apre e si vede SIA nella SALA AFK che a TABOO!
+          if (myRoom.includes("[AFK]") || window.giocoSelezionato === "taboo") {
               media.style.width = "100%";
               media.style.height = "100%";
               media.style.objectFit = "cover";
@@ -4438,7 +4439,7 @@
               label.style.borderRadius = "4px";
               label.style.fontSize = "0.7rem";
               label.style.fontWeight = "bold";
-              label.innerText = "Spettatore"; 
+              label.innerText = "Avversario"; 
 
               wrapper.appendChild(media);
               wrapper.appendChild(label);
