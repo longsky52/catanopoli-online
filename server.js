@@ -18,7 +18,7 @@ io.on("connection", (socket) => {
   });
 
   // 1. CREA LA STANZA
-  socket.on("createRoom", ({ roomName, roomPass, name, startMoney, gioco, tipoCarte, targetCarte }) => {
+  socket.on("createRoom", ({ roomName, roomPass, name, startMoney, gioco, tipoCarte, targetCarte, numPlayers }) => {
     if (rooms[roomName]) {
       socket.emit("roomError", "Esiste già una stanza con questo nome!");
       return;
@@ -31,6 +31,7 @@ io.on("connection", (socket) => {
       gioco: gioco || "catanopoli",
       tipoCarte: tipoCarte || "scopa",
       targetCarte: targetCarte || 11,
+      maxPlayers: numPlayers || 4, // Salva la scelta del numero di giocatori!
       players: [
         {
           id: socket.id, name: name, money: startMoney, position: 0,
@@ -53,7 +54,6 @@ io.on("connection", (socket) => {
 
     let isAFK = roomName.includes("[AFK]");
 
-    // Se NON è AFK e la partita è iniziata, chiudi le porte! Se è AFK, lascia passare.
     if (!isAFK && roomData.status !== "waiting") {
         socket.emit("roomError", "La partita è già iniziata, porte chiuse!");
         return;
@@ -61,11 +61,11 @@ io.on("connection", (socket) => {
 
     if (roomData.pass && roomData.pass !== roomPass) { socket.emit("roomError", "Password errata!"); return; }
     
-    // 🔥 LIMITI GIOCATORI DINAMICI: 4 per AFK o Catanopoli, 2 per le Carte standard
-    let maxPlayers = (roomData.gioco === "carte" && !isAFK) ? 2 : 4;
+    // 🔥 LIMITI GIOCATORI DINAMICI
+    let maxP = roomData.maxPlayers || ((roomData.gioco === "carte" || roomData.gioco === "forza4") && !isAFK ? 2 : 4);
     
-    if (roomData.players.length >= maxPlayers) {
-        socket.emit("roomError", `Stanza piena (max ${maxPlayers})!`);
+    if (roomData.players.length >= maxP) {
+        socket.emit("roomError", `Stanza piena (max ${maxP})!`);
         return;
     }
 
@@ -81,12 +81,9 @@ io.on("connection", (socket) => {
     io.emit("roomList", getPublicRooms());
 
     if (isAFK && roomData.status === "playing") {
-        // 🔥 L'AFK è già in corso! Il nuovo giocatore salta l'attesa ed entra direttamente.
         socket.emit("gameStarted", roomData);
-        // Avvisiamo gli altri già presenti che c'è un nuovo entrato!
         socket.to(roomName).emit("updateState", roomData); 
     } else {
-        // Stanza in attesa classica
         io.to(roomName).emit("waitingRoomUpdate", roomData);
     }
   });
@@ -95,25 +92,25 @@ io.on("connection", (socket) => {
   socket.on("hostStartGame", ({ roomName }) => {
     if (rooms[roomName] && rooms[roomName].hostId === socket.id) {
       rooms[roomName].status = "playing";
-      io.emit("roomList", getPublicRooms()); // Aggiorna la lista pubblica
+      io.emit("roomList", getPublicRooms()); 
       io.to(roomName).emit("gameStarted", rooms[roomName]);
     }
   });
 
   // ==========================================
-  // 🃏 POSTINI PER IL MULTIPLAYER DELLE CARTE 
+  // 🃏 POSTINI PER LE CARTE E PER IL FORZA 4 🔴
   // ==========================================
-  socket.on("carteSyncInit", (data) => {
-      socket.to(data.room).emit("riceviCarteSyncInit", data);
-  });
-  socket.on("carteAzione", (data) => {
-      socket.to(data.room).emit("riceviCarteAzione", data);
-  });
+  socket.on("carteSyncInit", (data) => { socket.to(data.room).emit("riceviCarteSyncInit", data); });
+  socket.on("carteAzione", (data) => { socket.to(data.room).emit("riceviCarteAzione", data); });
+
+  // I nuovi postini che si assicurano che l'avversario veda cadere i gettoni!
+  socket.on("f4SyncInit", (data) => { socket.to(data.room).emit("riceviF4SyncInit", data); });
+  socket.on("f4Mossa", (data) => { socket.to(data.room).emit("riceviF4Mossa", data); });
+  socket.on("f4Restart", (data) => { socket.to(data.room).emit("riceviF4Restart", data); });
   // ==========================================
 
   socket.on("sendTradeOffer", (data) => { io.to(data.room).emit("receiveTradeOffer", data); });
   socket.on("tradeAnswer", (data) => { io.to(data.room).emit("tradeResult", data); });
-
   socket.on("voiceReady", ({ room, peerId }) => { socket.to(room).emit("userVoiceReady", peerId); });
   socket.on("rollDice", ({ room, d1, d2 }) => { io.to(room).emit("diceRolled", { d1, d2, playerId: socket.id }); });
 
@@ -142,8 +139,7 @@ io.on("connection", (socket) => {
         
         if (giocatoriAttivi.length === 0) { 
             delete rooms[roomName]; 
-        } 
-        else if (room.status === "playing") {
+        } else if (room.status === "playing") {
           io.to(roomName).emit("playerLeft", room.players[playerIndex].name); 
           io.to(roomName).emit("updateState", room);
         } else { 
@@ -160,10 +156,9 @@ function getPublicRooms() {
   const list = [];
   for (const r in rooms) {
     let isAFK = r.includes("[AFK]");
-    // 🔥 MAGIA AFK: Mostra le Lounge anche se sono "playing", finché non arrivano al limite di 4 giocatori!
     if (rooms[r].status === "waiting" || (isAFK && rooms[r].players.length < 4)) {
-      let iconaGioco = rooms[r].gioco === "carte" ? "🃏" : "🎲";
-      if (isAFK) iconaGioco = "☕"; // Mette la tazzina per farla riconoscere al volo!
+      let iconaGioco = rooms[r].gioco === "carte" ? "🃏" : (rooms[r].gioco === "forza4" ? "🔴" : "🎲");
+      if (isAFK) iconaGioco = "☕";
       list.push({ name: iconaGioco + " " + r, rawName: r, playersCount: rooms[r].players.length, hasPass: rooms[r].pass !== "", gioco: rooms[r].gioco });
     }
   }
