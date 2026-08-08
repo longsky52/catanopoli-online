@@ -1,174 +1,4429 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
-app.use(express.static(__dirname));
-
-const rooms = {};
-
-io.on("connection", (socket) => {
-  socket.emit("roomList", getPublicRooms());
-
-  socket.on("getRooms", () => {
-    socket.emit("roomList", getPublicRooms());
-  });
-
-  // 1. CREA LA STANZA
-  socket.on("createRoom", ({ roomName, roomPass, name, startMoney, gioco, tipoCarte, targetCarte }) => {
-    if (rooms[roomName]) {
-      socket.emit("roomError", "Esiste già una stanza con questo nome!");
-      return;
-    }
-    socket.join(roomName);
-    rooms[roomName] = {
-      pass: roomPass || "",
-      status: "waiting",
-      hostId: socket.id,
-      gioco: gioco || "catanopoli",
-      tipoCarte: tipoCarte || "scopa",
-      targetCarte: targetCarte || 11,
-      players: [
-        {
-          id: socket.id, name: name, money: startMoney, position: 0,
-          color: "#bd2a2a", inJail: false, jailTurns: 0, bankrupt: false,
-        },
-      ],
-      turnIndex: 0,
-      properties: {},
-    };
-
-    io.emit("roomList", getPublicRooms());
-    io.to(roomName).emit("waitingRoomUpdate", rooms[roomName]);
-  });
-
-  // 2. UNISCITI A UNA STANZA
-  socket.on("joinSpecificRoom", ({ roomName, roomPass, name, startMoney }) => {
-    const roomData = rooms[roomName];
-
-    if (!roomData) { socket.emit("roomError", "Stanza inesistente!"); return; }
-
-    let isAFK = roomName.includes("[AFK]");
-
-    // Se NON è AFK e la partita è iniziata, chiudi le porte! Se è AFK, lascia passare.
-    if (!isAFK && roomData.status !== "waiting") {
-        socket.emit("roomError", "La partita è già iniziata, porte chiuse!");
-        return;
-    }
-
-    if (roomData.pass && roomData.pass !== roomPass) { socket.emit("roomError", "Password errata!"); return; }
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Catanopoli</title>
     
-    // 🔥 LIMITI GIOCATORI DINAMICI: 4 per AFK o Catanopoli, 2 per le Carte standard
-    let maxPlayers = (roomData.gioco === "carte" && !isAFK) ? 2 : 4;
-    
-    if (roomData.players.length >= maxPlayers) {
-        socket.emit("roomError", `Stanza piena (max ${maxPlayers})!`);
-        return;
-    }
+    <!-- MAGIA PER IL FULLSCREEN (COLLEGA IL MANIFEST) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f121a">
 
-    socket.join(roomName);
-    const colors = ["#bd2a2a", "#2c4a8a", "#3b7a3b", "#d1b438"];
-    const color = colors[roomData.players.length % colors.length];
-
-    roomData.players.push({
-      id: socket.id, name: name, money: startMoney, position: 0,
-      color: color, inJail: false, jailTurns: 0, bankrupt: false,
-    });
-
-    io.emit("roomList", getPublicRooms());
-
-    if (isAFK && roomData.status === "playing") {
-        // 🔥 L'AFK è già in corso! Il nuovo giocatore salta l'attesa ed entra direttamente.
-        socket.emit("gameStarted", roomData);
-        // Avvisiamo gli altri già presenti che c'è un nuovo entrato!
-        socket.to(roomName).emit("updateState", roomData); 
-    } else {
-        // Stanza in attesa classica
-        io.to(roomName).emit("waitingRoomUpdate", roomData);
-    }
-  });
-
-  // 3. L'HOST AVVIA LA PARTITA
-  socket.on("hostStartGame", ({ roomName }) => {
-    if (rooms[roomName] && rooms[roomName].hostId === socket.id) {
-      rooms[roomName].status = "playing";
-      io.emit("roomList", getPublicRooms()); // Aggiorna la lista pubblica
-      io.to(roomName).emit("gameStarted", rooms[roomName]);
-    }
-  });
-
-  // ==========================================
-  // 🃏 POSTINI PER IL MULTIPLAYER DELLE CARTE 
-  // ==========================================
-  socket.on("carteSyncInit", (data) => {
-      socket.to(data.room).emit("riceviCarteSyncInit", data);
-  });
-  socket.on("carteAzione", (data) => {
-      socket.to(data.room).emit("riceviCarteAzione", data);
-  });
-  // ==========================================
-
-  socket.on("sendTradeOffer", (data) => { io.to(data.room).emit("receiveTradeOffer", data); });
-  socket.on("tradeAnswer", (data) => { io.to(data.room).emit("tradeResult", data); });
-
-  socket.on("voiceReady", ({ room, peerId }) => { socket.to(room).emit("userVoiceReady", peerId); });
-  socket.on("rollDice", ({ room, d1, d2 }) => { io.to(room).emit("diceRolled", { d1, d2, playerId: socket.id }); });
-
-  socket.on("syncAction", ({ room, players, properties, logMsg }) => {
-    if (rooms[room]) {
-      rooms[room].players = players; rooms[room].properties = properties;
-      io.to(room).emit("stateSynced", { players, properties, logMsg });
-    }
-  });
-
-  socket.on("endTurn", ({ room }) => {
-    if (rooms[room]) {
-      do { rooms[room].turnIndex = (rooms[room].turnIndex + 1) % rooms[room].players.length;
-      } while (rooms[room].players[rooms[room].turnIndex].bankrupt);
-      io.to(room).emit("updateState", rooms[room]);
-    }
-  });
-
-  socket.on("disconnect", () => {
-    for (const roomName in rooms) {
-      const room = rooms[roomName];
-      const playerIndex = room.players.findIndex((p) => p.id === socket.id);
-      if (playerIndex !== -1) {
-        room.players[playerIndex].bankrupt = true;
-        const giocatoriAttivi = room.players.filter((p) => !p.bankrupt);
-        
-        if (giocatoriAttivi.length === 0) { 
-            delete rooms[roomName]; 
-        } 
-        else if (room.status === "playing") {
-          io.to(roomName).emit("playerLeft", room.players[playerIndex].name); 
-          io.to(roomName).emit("updateState", room);
-        } else { 
-          io.to(roomName).emit("waitingRoomUpdate", room); 
-        }
-        io.emit("roomList", getPublicRooms());
-        break;
+    <style>
+      :root {
+        --board-bg: #141b29;
+        --tile-bg: #fdf5e6; /* Crema molto più luminoso per far risaltare il testo */
+        --border-color: #d4af37; /* Oro brillante ed esplosivo */
+        --text-color: #000000; /* Nero puro per contrasto netto */
+        --app-bg: #0f121a;
       }
-    }
-  });
-});
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "Georgia", serif;
+        user-select: none;
+      }
+      body {
+        background-color: var(--app-bg);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        color: white;
+      }
 
-function getPublicRooms() {
-  const list = [];
-  for (const r in rooms) {
-    let isAFK = r.includes("[AFK]");
-    // 🔥 MAGIA AFK: Mostra le Lounge anche se sono "playing", finché non arrivano al limite di 4 giocatori!
-    if (rooms[r].status === "waiting" || (isAFK && rooms[r].players.length < 4)) {
-      let iconaGioco = rooms[r].gioco === "carte" ? "🃏" : "🎲";
-      if (isAFK) iconaGioco = "☕"; // Mette la tazzina per farla riconoscere al volo!
-      list.push({ name: iconaGioco + " " + r, rawName: r, playersCount: rooms[r].players.length, hasPass: rooms[r].pass !== "", gioco: rooms[r].gioco });
-    }
-  }
-  return list;
-}
+      /* MENU E POPUP */
+      .menu-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: radial-gradient(
+          circle at 50% 0%,
+          #2a3b5c 0%,
+          var(--app-bg) 70%
+        );
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        overflow-y: auto;
+      }
+      .menu-logo {
+        max-width: 200px;
+        margin-bottom: 20px;
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+      }
+      .input-group {
+        width: 100%;
+        max-width: 300px;
+        margin-bottom: 12px;
+        text-align: left;
+      }
+      .input-group label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--border-color);
+        margin-bottom: 4px;
+        font-weight: bold;
+      }
+      .input-group input,
+      .input-group select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: #0f121a;
+        color: white;
+        font-size: 1rem;
+      }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server Catanopoli Online attivo sulla porta ${PORT}!`));
+      .btn {
+        padding: 12px;
+        background: linear-gradient(135deg, #c99c51, #e3c482, #c99c51);
+        color: var(--app-bg);
+        border: 2px solid #8c6830;
+        font-weight: bold;
+        font-size: 0.95rem;
+        border-radius: 8px;
+        cursor: pointer;
+        text-transform: uppercase;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        transition: transform 0.1s;
+      }
+      .btn:active {
+        transform: translateY(2px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      }
+      .btn.secondary {
+        background: rgba(20, 27, 41, 0.8);
+        color: var(--border-color);
+        border: 2px solid var(--border-color);
+        box-shadow: none;
+        padding: 10px;
+        font-size: 0.85rem;
+      }
+      .btn:disabled {
+        filter: grayscale(100%);
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-exit {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 60;
+        background: #bd2a2a;
+        color: white;
+        border: 2px solid white;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-overlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 200;
+        justify-content: center;
+        align-items: center;
+        padding: 15px;
+      }
+      .modal-content {
+        background: rgba(20, 27, 41, 0.95);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 20px;
+        width: 100%;
+        max-width: 550px;
+        max-height: 90vh;
+        overflow-y: auto;
+        color: var(--tile-bg);
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+      }
+      .modal-content h3 {
+        color: #c99c51;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #c99c51;
+        padding-bottom: 10px;
+      }
+
+      /* === STILI SALA GIOCHI (TOTALITY GAME HUB) === */
+      .game-hub-title {
+        color: #c99c51;
+        font-size: 1.5rem;
+        margin: 15px 0 10px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        border-bottom: 2px solid #c99c51;
+        padding-bottom: 5px;
+        width: 100%;
+        max-width: 350px;
+        text-align: center;
+      }
+      .game-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        width: 100%;
+        max-width: 350px;
+        margin-bottom: 20px;
+      }
+      .game-card {
+        background: rgba(20, 27, 41, 0.9);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        position: relative;
+      }
+      .game-card.locked {
+        border-color: #555;
+        background: rgba(10, 10, 10, 0.8);
+        color: #777;
+        overflow: hidden;
+      }
+      .game-card.locked::after {
+        content: "🔒 IN SVILUPPO";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-5deg);
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #bd2a2a;
+        text-shadow: 2px 2px 5px black;
+        white-space: nowrap;
+        pointer-events: none;
+        background: rgba(0,0,0,0.8);
+        padding: 5px 15px;
+        border-radius: 8px;
+        border: 2px solid #bd2a2a;
+      }
+      .game-title {
+        font-size: 1.4rem;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: var(--border-color);
+        text-align: center;
+      }
+      .game-card.locked .game-title {
+        color: #777;
+      }
+      .game-desc {
+        font-size: 0.85rem;
+        color: #ccc;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+
+      /* LAYOUT SCAMBI E MINI-CARTE */
+      .trade-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        align-content: flex-start;
+        max-height: 220px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid #555;
+        margin-bottom: 10px;
+        min-height: 120px;
+      }
+      .mini-card-wrapper {
+        cursor: pointer;
+        position: relative;
+        display: inline-block;
+      }
+      .mini-card-wrapper input[type="checkbox"] {
+        position: absolute;
+        top: 22px;
+        right: 6px;
+        transform: scale(1.3);
+        z-index: 10;
+        cursor: pointer;
+      }
+      .mini-card {
+        width: 75px;
+        height: 105px;
+        background: var(--tile-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        color: var(--text-color);
+        font-size: 0.55rem;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+      }
+      .mini-card b {
+        line-height: 1.1;
+        margin-top: 2px;
+      }
+
+
+      /* === TAVOLO VERDE (CARTE SICILIANE) === */
+      #cards-ui {
+        background: radial-gradient(circle at 50% 40%, #1a5c2b 0%, #0a2610 100%);
+        padding-bottom: 20px;
+        display: none;
+        flex-direction: column;
+        height: 100vh;
+        width: 100%;
+        position: relative;
+        z-index: 50;
+      }
+      .cards-table-center {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-content: center;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        width: 100%;
+        max-width: 500px;
+        margin: auto;
+        padding: 10px;
+        border: 2px dashed rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+      }
+      .player-hand {
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        gap: -20px; /* Sovrapposizione delle carte in mano */
+        margin-bottom: 10px;
+        min-height: 120px;
+      }
+      .opponent-hand {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 5px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+        min-height: 80px;
+      }
+      .card-slot {
+        width: clamp(50px, 15vw, 80px);
+        aspect-ratio: 2/3;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 6px;
+      }
+      .playing-card {
+        width: clamp(65px, 18vw, 90px);
+        aspect-ratio: 2/3;
+        background: #fdf5e6;
+        border: 2px solid #000;
+        border-radius: 8px;
+        box-shadow: 2px 4px 10px rgba(0,0,0,0.6);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        font-size: clamp(1rem, 3vw, 1.5rem);
+        color: black;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        position: relative;
+        z-index: 10;
+      }
+      .playing-card:hover, .playing-card:active {
+        transform: translateY(-15px) scale(1.05);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.9);
+        z-index: 20;
+      }
+      /* AGGIUNGI QUESTA CLASSE NUOVA: */
+      .playing-card.selezionata {
+        box-shadow: 0 0 20px #c99c51, inset 0 0 10px #c99c51;
+        border-color: #c99c51;
+        transform: scale(1.05);
+      }
+      .card-back {
+        background: repeating-linear-gradient(45deg, #bd2a2a, #bd2a2a 10px, #8a1f1f 10px, #8a1f1f 20px);
+        border: 2px solid white;
+        cursor: default;
+      }
+      .card-back:hover { transform: none; box-shadow: 2px 4px 10px rgba(0,0,0,0.6); }
+      
+      .cards-hud {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(0,0,0,0.8);
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto 10px auto;
+      }
+
+         
+
+
+
+      /* AREA DI GIOCO */
+      #game-ui {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        width: 100%;
+        padding: 10px;
+        position: relative;
+      }
+      .tokens-container {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: calc(100% - 4px);
+        height: calc(100% - 4px);
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 2px;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .player-token {
+        width: clamp(16px, 3.5vmin, 26px);
+        height: clamp(16px, 3.5vmin, 26px);
+        border-radius: 50%;
+        border: 1.5px solid white;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.8);
+        transition: all 0.3s;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: clamp(10px, 2.2vmin, 16px);
+        text-shadow: 0 0 3px rgba(0,0,0,0.9);
+      }
+
+      /* TABELLONE */
+      #game-wrapper {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+      }
+      .board {
+        width: min(95vw, calc(100vh - 160px));
+        max-width: 900px;
+        aspect-ratio: 1 / 1;
+        background-color: var(--board-bg);
+        border: 3px solid var(--border-color);
+        display: grid;
+        /* Ritorno alla simmetria perfetta: 11 quadrati tutti identici per lato! */
+        grid-template-columns: repeat(11, 1fr);
+        grid-template-rows: repeat(11, 1fr);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+        border-radius: 4px;
+        position: relative;
+      }
+      .tile {
+        background-color: var(--tile-bg);
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        font-size: clamp(0.2rem, 0.9vmin, 0.75rem);
+        text-align: center;
+        color: var(--text-color);
+        font-weight: bold;
+        padding: 1px;
+        overflow: hidden;
+        position: relative;
+      }
+      .tile-header {
+        width: 100%;
+        height: clamp(4px, 1.5vmin, 15px);
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 2px;
+      }
+      .price-tag {
+        font-size: clamp(0.2rem, 0.7vmin, 0.55rem);
+        color: #4a4a4a;
+        margin-top: auto;
+        padding-bottom: 2px;
+        font-weight: normal;
+      }
+      .property-badge {
+        position: absolute;
+        bottom: 12px;
+        right: 2px;
+        font-size: clamp(0.3rem, 1vmin, 0.6rem);
+        background: rgba(0, 0, 0, 0.85);
+        padding: 2px 4px;
+        border-radius: 4px;
+        display: flex;
+        gap: 1px;
+      }
+
+      .c-marrone {
+        background-color: #8B4513; /* Marrone cuoio intenso */
+      }
+      .c-celeste {
+        background-color: #00BFFF; /* Azzurro cielo accesissimo */
+      }
+      .c-viola {
+        background-color: #D81B60; /* Fucsia/Viola vibrante */
+      }
+      .c-arancio {
+        background-color: #FF7F00; /* Arancio puro e saturo */
+      }
+      .c-rosso {
+        background-color: #E60000; /* Rosso sangue fortissimo */
+      }
+      .c-giallo {
+        background-color: #FFD700; /* Giallo Oro sparato */
+      }
+      .c-verde {
+        background-color: #00AA00; /* Verde prato luminoso */
+      }
+      .c-blu {
+        background-color: #0055CC; /* Blu reale profondo ma acceso */
+      }
+
+      #tile-0 {
+        grid-area: 11 / 11;
+      }
+      #tile-1 {
+        grid-area: 11 / 10;
+      }
+      #tile-2 {
+        grid-area: 11 / 9;
+      }
+      #tile-3 {
+        grid-area: 11 / 8;
+      }
+      #tile-4 {
+        grid-area: 11 / 7;
+      }
+      #tile-5 {
+        grid-area: 11 / 6;
+      }
+      #tile-6 {
+        grid-area: 11 / 5;
+      }
+      #tile-7 {
+        grid-area: 11 / 4;
+      }
+      #tile-8 {
+        grid-area: 11 / 3;
+      }
+      #tile-9 {
+        grid-area: 11 / 2;
+      }
+      #tile-10 {
+        grid-area: 11 / 1;
+      }
+      #tile-11 {
+        grid-area: 10 / 1;
+      }
+      #tile-12 {
+        grid-area: 9 / 1;
+      }
+      #tile-13 {
+        grid-area: 8 / 1;
+      }
+      #tile-14 {
+        grid-area: 7 / 1;
+      }
+      #tile-15 {
+        grid-area: 6 / 1;
+      }
+      #tile-16 {
+        grid-area: 5 / 1;
+      }
+      #tile-17 {
+        grid-area: 4 / 1;
+      }
+      #tile-18 {
+        grid-area: 3 / 1;
+      }
+      #tile-19 {
+        grid-area: 2 / 1;
+      }
+      #tile-20 {
+        grid-area: 1 / 1;
+      }
+      #tile-21 {
+        grid-area: 1 / 2;
+      }
+      #tile-22 {
+        grid-area: 1 / 3;
+      }
+      #tile-23 {
+        grid-area: 1 / 4;
+      }
+      #tile-24 {
+        grid-area: 1 / 5;
+      }
+      #tile-25 {
+        grid-area: 1 / 6;
+      }
+      #tile-26 {
+        grid-area: 1 / 7;
+      }
+      #tile-27 {
+        grid-area: 1 / 8;
+      }
+      #tile-28 {
+        grid-area: 1 / 9;
+      }
+      #tile-29 {
+        grid-area: 1 / 10;
+      }
+      #tile-30 {
+        grid-area: 1 / 11;
+      }
+      #tile-31 {
+        grid-area: 2 / 11;
+      }
+      #tile-32 {
+        grid-area: 3 / 11;
+      }
+      #tile-33 {
+        grid-area: 4 / 11;
+      }
+      #tile-34 {
+        grid-area: 5 / 11;
+      }
+      #tile-35 {
+        grid-area: 6 / 11;
+      }
+      #tile-36 {
+        grid-area: 7 / 11;
+      }
+      #tile-37 {
+        grid-area: 8 / 11;
+      }
+      #tile-38 {
+        grid-area: 9 / 11;
+      }
+      #tile-39 {
+        grid-area: 10 / 11;
+      }
+
+      .center-board {
+        grid-area: 2 / 2 / 11 / 11;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+      }
+      .center-board img {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: 1;
+      }
+      #dice-result {
+        position: absolute;
+        bottom: 8%;
+        color: var(--tile-bg);
+        font-size: clamp(1.2rem, 3.5vmin, 2.5rem);
+        text-shadow: 0 4px 15px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 1);
+        z-index: 5;
+      }
+      .rolling-dice {
+        display: inline-block;
+        animation: dice-shake 0.15s infinite;
+        letter-spacing: 5px;
+      }
+      @keyframes dice-shake {
+        0% {
+          transform: translateY(0px) rotate(0deg);
+        }
+        25% {
+          transform: translateY(-3px) rotate(-15deg);
+        }
+        50% {
+          transform: translateY(0px) rotate(0deg);
+        }
+        75% {
+          transform: translateY(3px) rotate(15deg);
+        }
+        100% {
+          transform: translateY(0px) rotate(0deg);
+        }
+      }
+
+      /* CONSOLE */
+      .bottom-hud {
+        width: min(95vw, calc(100vh - 160px));
+        max-width: 900px;
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #game-log {
+        background: rgba(20, 27, 41, 0.85);
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px;
+        text-align: center;
+        color: var(--tile-bg);
+        font-size: 0.95rem;
+        font-weight: bold;
+        width: 100%;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .action-row {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        gap: 10px;
+      }
+      .action-left,
+      .action-right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .action-row .btn {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 55px;
+      }
+
+      /* ========================================= */
+      /* FIX GRAFICA DEFINITIVO PC E MOBILE        */
+      /* ========================================= */
+      #game-ui {
+        padding-top: 75px !important; 
+        justify-content: flex-start !important;
+        overflow-y: auto !important; 
+      }
+      .board {
+        width: 100% !important;
+        max-width: min(95vw, 75vh) !important; 
+        margin-bottom: 5px !important;
+      }
+      .bottom-hud {
+        width: 100% !important;
+        max-width: min(95vw, 75vh) !important;
+        padding-bottom: 20px !important;
+      }
+      
+      #scoreboard {
+        gap: 8px 15px !important;
+        border: none !important;
+        background: rgba(0,0,0,0.7) !important;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
+      }
+      #scoreboard span {
+        border: none !important; 
+        font-size: clamp(0.85rem, 3vmin, 1.1rem) !important;
+      }
+      #center-zoom {
+        width: 45% !important;
+        height: 50% !important;
+      }
+      @media (max-width: 600px) {
+        div[style*="right: 55px"] {
+          right: 45px !important;
+          transform: scale(0.8);
+          transform-origin: top right;
+        }
+        div[style*="left: 10px"] {
+          transform: scale(0.8);
+          transform-origin: top left;
+        }
+      }
+
+      /* ========================================= */
+      /* EFFETTO 3D, NEON E PROSPETTIVA ISOMETRICA */
+      /* ========================================= */
+      
+      #game-wrapper {
+        perspective: 1200px; 
+      }
+      
+      .board {
+        transform: rotateX(6deg) scale(0.98); /* Inclinazione più dolce per facilitare i click */
+        transform-style: preserve-3d;
+        border: 4px solid var(--border-color) !important;
+        border-radius: 12px !important;
+        animation: respiroNeon 3.5s infinite alternate ease-in-out;
+      }
+      
+      @keyframes respiroNeon {
+        0% { 
+          box-shadow: 0 15px 30px rgba(0,0,0,0.8), 0 0 10px var(--border-color); 
+          transform: rotateX(6deg) scale(0.98) translateY(0px); 
+        }
+        100% { 
+          box-shadow: 0 25px 45px rgba(0,0,0,1), 0 0 25px var(--border-color), 0 0 40px #c99c51; 
+          transform: rotateX(7.5deg) scale(0.99) translateY(-2px); 
+        }
+      }
+
+      /* FIX MAGICO DEI CLICK SULLE CASELLE E COLORI RIPRISTINATI */
+      .tile {
+        box-shadow: inset -2px -2px 6px rgba(0,0,0,0.4), inset 2px 2px 6px rgba(255,255,255,0.7);
+        transition: filter 0.1s, transform 0.1s;
+        pointer-events: auto !important;
+        z-index: 5;
+        touch-action: manipulation;
+      }
+      
+      .tile:active {
+        filter: brightness(0.7);
+      }
+
+      /* Assicura che i contenitori non blocchino i tocca-schermo */
+      .tokens-container {
+        pointer-events: none !important;
+      }
+
+      .player-token {
+        transform: translateY(-4px) translateZ(10px) !important;
+        box-shadow: 0 8px 12px rgba(0,0,0,0.9) !important;
+        border: 2px solid white !important;
+      }
+      
+      #center-zoom {
+        transform: translateZ(30px) !important;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.9), 0 0 30px var(--border-color) !important;
+      }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="motore-carte.js"></script>
+  </head>
+  <body>
+    <!-- BANNER INSTALLAZIONE APP -->
+    <div id="install-banner" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(20,27,41,0.95); padding:15px; border-radius:12px; border:2px solid var(--border-color); text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.9); width:90%; max-width:350px;">
+      <h3 style="margin-bottom:10px; color:#c99c51;">📱 Installa Totality Games!</h3>
+      <p style="font-size:0.85rem; margin-bottom:15px; color:white;">Aggiungila alla Home per giocare a schermo intero.</p>
+      <button class="btn" id="btn-install" style="font-size:0.85rem; margin-bottom:8px;">INSTALLA APP</button>
+      <button class="btn secondary" style="padding:8px; font-size:0.75rem;" onclick="document.getElementById('install-banner').style.display='none'">Più tardi</button>
+    </div>
+
+    <div id="audio-container" style="display: none"></div>
+
+    <!-- SCHERMATA ACCESSO / REGISTRAZIONE -->
+    <div id="auth-menu" class="menu-screen">
+      <img src="logo-catanopoli.png" alt="Logo" class="menu-logo" id="auth-logo-img" />
+      <h2 style="color: var(--border-color); margin-bottom: 15px; font-size: 1.5rem;">ACCESSO VIP</h2>
+      
+      <div class="input-group">
+        <label>USERNAME:</label>
+        <input type="text" id="auth-username" placeholder="Inserisci username" />
+      </div>
+      <div class="input-group">
+        <label>PASSWORD:</label>
+        <div style="position: relative;">
+          <input type="password" id="auth-password" placeholder="Inserisci password" style="padding-right: 40px;" />
+          <span id="toggle-pass-icon" onclick="togglePassword()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1.2rem;">👁️</span>
+        </div>
+      </div>
+      
+      <!-- CHECKBOX RICORDAMI -->
+      <div class="input-group" style="margin-top: 0px; margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #ccc; margin: 0; font-size: 0.85rem; text-transform: none; font-weight: normal;">
+          <input type="checkbox" id="auth-remember" style="width: 16px; height: 16px; accent-color: #c99c51;">
+          Ricordami
+        </label>
+      </div>
+      
+      <div style="display: flex; gap: 10px; width: 100%; max-width: 300px; margin-top: 5px;">
+        <button class="btn" style="flex: 1; font-size: 0.8rem;" onclick="eseguiLogin()">ACCEDI</button>
+        <button class="btn secondary" style="flex: 1; font-size: 0.8rem; background: #2c4a8a; border-color: #1a2a5a; color: white;" onclick="eseguiRegistrazione()">REGISTRATI</button>
+      </div>
+
+      <div style="margin: 20px 0; width: 100%; max-width: 300px; text-align: center; border-bottom: 1px solid #444; line-height: 0.1em;">
+        <span style="background: var(--app-bg); padding: 0 10px; color: #888; font-size: 0.8rem;">OPPURE</span>
+      </div>
+
+      <button class="btn secondary" style="max-width: 300px; width: 100%;" onclick="entraComeOspite()">
+        GIOCA COME OSPITE
+      </button>
+    </div>
+
+    <!-- MENU SETUP (GAME HUB TOTALITY) -->
+    <div id="main-menu" class="menu-screen" style="display: none; justify-content: flex-start; padding-top: 50px; padding-bottom: 50px;">
+      
+      <!-- INGRANAGGIO MENU PRINCIPALE -->
+      <button onclick="apriImpostazioni()" style="position:absolute; top:15px; right:15px; background:rgba(0,0,0,0.6); border:2px solid var(--border-color); color:white; border-radius:50%; width:45px; height:45px; font-size:1.5rem; cursor:pointer; display:flex; justify-content:center; align-items:center; z-index: 101; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">⚙️</button>
+
+      <h1 style="color: #c99c51; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 5px; text-shadow: 0 4px 10px black; text-align: center;">Totality Games</h1>
+      <p style="color: #aaa; font-size: 0.85rem; margin-bottom: 20px; text-align: center;">Sviluppato da DonLucio 👑</p>
+
+      <!-- PROFILO GLOBALE (LA TUA FOTOCAMERA E NOME SONO TORNATI QUI!) -->
+      <div style="background: rgba(0,0,0,0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; width: 100%; max-width: 350px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+        
+        <!-- INTESTAZIONE UTENTE LOGGATO -->
+        <div id="user-logged-info" style="display: none; text-align: center; margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+          <span style="color: white; font-size: 0.85rem;">Bentornato: <b id="logged-username" style="color: #44ff44;"></b></span>
+          <button class="btn secondary" style="margin-top: 8px; padding: 5px; font-size: 0.7rem; border-color: #bd2a2a; color: #bd2a2a; width: 100%;" onclick="eseguiLogout()">🚪 DISCONNETTI</button>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 10px; max-width: 100%;">
+          <label style="text-align: center;">IL TUO NOME IN GIOCO:</label>
+          <input type="text" id="setup-name" value="" placeholder="Inserisci nome" style="text-align: center; font-weight: bold; color: #c99c51;" />
+        </div>
+
+        <div class="input-group" style="text-align: center; margin-bottom: 0; max-width: 100%;">
+          <label style="color:#44ff44;">FOTO PROFILO:</label>
+          <!-- MOTORE SDOPPIATO PER FOTOCAMERA/GALLERIA -->
+          <input type="file" id="camera-input" accept="image/*" capture="user" style="display:none;" onchange="elaboraFoto(event)">
+          <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="elaboraFoto(event)">
+          
+          <div style="display: flex; gap: 10px; justify-content: center; width: 100%;">
+            <button class="btn secondary" style="flex: 1; font-size: 0.75rem; border-color: #44ff44; color: #44ff44; padding: 8px;" onclick="document.getElementById('camera-input').click()">
+              📸 SCATTA
+            </button>
+            <button class="btn secondary" style="flex: 1; font-size: 0.75rem; border-color: #44ff44; color: #44ff44; padding: 8px;" onclick="document.getElementById('gallery-input').click()">
+              🖼️ GALLERIA
+            </button>
+          </div>
+          <img id="preview-foto" src="" style="display:none; width: 60px; height: 60px; border-radius: 50%; margin: 10px auto 0; border: 2px solid var(--border-color); object-fit: cover; box-shadow: 0 0 10px rgba(0,0,0,0.8);">
+        </div>
+      </div>
+
+      <div class="game-hub-title">Scegli il Gioco</div>
+
+      <!-- GRIGLIA GIOCHI -->
+      <div class="game-grid">
+        
+        <!-- GIOCO 1: CATANOPOLI (ATTIVO) -->
+        <div class="game-card">
+          <img src="logo-catanopoli.png" alt="Catanopoli" style="max-width: 160px; margin-bottom: 10px; border-radius: 8px;" onerror="this.style.display='none'">
+          <div class="game-title">CATANOPOLI</div>
+          <p class="game-desc">Compra le strade di Catania, costruisci chioschi e manda in bancarotta i tuoi amici!</p>
+          
+          <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px;">
+            <div class="input-group" style="margin-bottom: 0; flex: 1;">
+              <label style="font-size:0.7rem;">SOLDI INIZIALI:</label>
+              <select id="setup-money" style="font-size:0.8rem; padding:6px;">
+                <option value="1500">1500€</option>
+                <option value="2500">2500€</option>
+                <option value="5000">5000€</option>
+              </select>
+            </div>
+            <div class="input-group" style="margin-bottom: 0; flex: 1;">
+              <label style="font-size:0.7rem;">PEDINA:</label>
+              <select id="setup-token" style="font-size: 1rem; padding:6px; text-align: center;">
+                <option value="🐘">🐘 Liotru</option>
+                <option value="🍊">🍊 Arancino</option>
+                <option value="🛵">🛵 Motorino</option>
+                <option value="🍧">🍧 Granita</option>
+                <option value="🌋">🌋 Vulcano</option>
+                <option value="⚽">⚽ Pallone</option>
+                <option value="🚓">🚓 Pantera</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+            <!-- 🔥 Memorizziamo la scelta: Catanopoli -->
+            <button class="btn" style="font-size: 0.85rem; padding: 10px;" onclick="giocoSelezionato='catanopoli'; showSetup('single')">👤 SINGLE PLAYER (BOT)</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #2c4a8a, #4a7acc);" onclick="giocoSelezionato='catanopoli'; showSetup('multi')">🌐 MULTIPLAYER ONLINE</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="showSetup('afk')">☕ SALA AFK (VIP LOUNGE)</button>
+          </div>
+        </div>
+
+        <!-- GIOCO 2: CARTE SICILIANE -->
+        <div class="game-card">
+          <div style="margin-bottom: 5px;">
+             <!-- 🔥 Nuova icona personalizzata: Asso di Bastoni -->
+             <img src="carte/1_bastoni.png" alt="Carte" style="height: 65px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);" onerror="this.onerror=null; this.src='carte-icon.png'; this.nextElementSibling.style.display='block';">
+             <span style="font-size: 3rem; display:none;">🃏</span>
+          </div>
+          <div class="game-title">CARTE SICILIANE</div>
+          <p class="game-desc">Sfida i tuoi amici a Scopa o Briscola sul Tavolo.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 15px;">
+            <button class="btn" style="font-size: 0.85rem; padding: 10px;" onclick="giocoSelezionato='carte'; showSetup('cards_menu')">👤 SINGLE PLAYER (BOT)</button>
+            <!-- TASTO MULTIPLAYER SBLOCCATO! -->
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #2c4a8a, #4a7acc);" onclick="giocoSelezionato='carte'; showSetup('multi')">🌐 MULTIPLAYER ONLINE</button>
+            <button class="btn" style="font-size: 0.85rem; padding: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="showSetup('afk')">☕ SALA AFK (VIP LOUNGE)</button>
+          </div>
+        </div>
+
+        <!-- GIOCO 3: TABOO -->
+        <div class="game-card locked">
+          <div style="margin-bottom: 5px;">
+            <img src="taboo-icon.png" alt="Taboo" style="height: 60px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <span style="font-size: 3rem; display:none;">🗣️</span>
+          </div>
+          <div class="game-title">TABOO SICILIANO</div>
+          <p class="game-desc">Fai indovinare la parola alla tua squadra senza usare le parole vietate. In videochat!</p>
+        </div>
+
+        <!-- GIOCO 4: FORZA 4 -->
+        <div class="game-card locked">
+          <div style="font-size: 3rem; margin-bottom: 5px;">🔴</div>
+          <div class="game-title">FORZA 4</div>
+          <p class="game-desc">Allinea 4 gettoni prima del tuo avversario. Rapido e letale.</p>
+        </div>
+      </div>
+
+      <!-- SEZIONE SOCIAL E AGENZIA -->
+      <div style="text-align: center; font-size: 0.8rem; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); width: 100%; max-width: 350px; margin-bottom: 20px;">
+        <h4 style="color: #c99c51; margin-bottom: 10px;">Segui DonLucio 👑</h4>
+        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
+          <a href="https://www.tiktok.com/@xxdonemusaxx?_r=1&_t=ZN-98azXsac5zi" target="_blank" class="btn secondary" style="flex: 1; padding: 6px; font-size: 0.75rem; text-decoration: none; color: white;">🎵 TikTok</a>
+        </div>
+        <p style="margin-bottom: 8px; line-height: 1.4; color: #ccc;">Vuoi iniziare a fare live su TikTok? Entra nell'agenzia!</p>
+        <a href="https://www.tiktok.com/t/ZMBmQArq8/" target="_blank" class="btn" style="text-decoration: none; padding: 8px; font-size: 0.85rem; background: #2c4a8a; color: white; border-color: #1a2a5a;">🚀 TOTALITY LIVE AGENCY</a>
+      </div>
+    </div>
+
+    <div id="bot-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 20px">
+        Impostazioni Bot
+      </h2>
+      <div class="input-group">
+        <label>NUMERO DI AVVERSARI:</label>
+        <select id="setup-bots-count">
+          <option value="1">1 Bot</option>
+          <option value="2" selected>2 Bot</option>
+          <option value="3">3 Bot</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>DIFFICOLTÀ IA:</label>
+        <select id="setup-bots-diff">
+          <option value="facile">Principiante (Compra a caso)</option>
+          <option value="medio" selected>Intermedio (Ragiona)</option>
+          <option value="difficile">Squalo (Compra tutto)</option>
+        </select>
+      </div>
+      <button
+        class="btn"
+        style="max-width: 300px; margin-top: 20px"
+        onclick="startGame('single')"
+      >
+        AVVIA PARTITA
+      </button>
+      <button
+        class="btn secondary"
+        style="max-width: 300px; margin-top: 10px"
+        onclick="goBackMenu()"
+      >
+        INDIETRO
+      </button>
+    </div>
+
+    <!-- MENU SETUP SPECIFICO PER LE CARTE -->
+    <div id="cards-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 20px">ADDIVETTITI MBARE</h2>
+      
+      <div class="input-group">
+        <label>GIOCATORI:</label>
+        <select id="cards-setup-players">
+          <option value="2">2 Giocatori (1v1)</option>
+          <option value="4">4 Giocatori (A Coppie)</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>SCEGLI IL GIOCO:</label>
+        <select id="cards-setup-tipo" onchange="aggiornaOpzioniCarte()">
+          <option value="scopa">🧹 Scopa</option>
+          <option value="briscola">👊 Briscola</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>DIFFICOLTÀ BOT:</label>
+        <select id="cards-setup-diff">
+          <option value="facile">Principiante (Casuale)</option>
+          <option value="medio" selected>Intermedio</option>
+          <option value="difficile">Squalo</option>
+        </select>
+      </div>
+
+      <div class="input-group" id="box-punti-scopa">
+        <label>PUNTI VITTORIA SCOPA:</label>
+        <select id="cards-setup-target">
+          <option value="11">11 Punti</option>
+          <option value="21">21 Punti</option>
+          <option value="51">51 Punti</option>
+        </select>
+      </div>
+
+      <div class="input-group" id="box-punti-briscola" style="display:none;">
+        <label>PUNTI VITTORIA BRISCOLA:</label>
+        <input type="text" value="120 Punti" disabled style="background:#333; color:#aaa; text-align:center; font-weight:bold;">
+      </div>
+
+      <button class="btn" style="max-width: 300px; margin-top: 20px" onclick="if(typeof avviaPartitaDaMenuCarte === 'function') avviaPartitaDaMenuCarte(); else alert('Caricamento motore in corso...');">AVVIA PARTITA</button>
+      <button class="btn secondary" style="max-width: 300px; margin-top: 10px" onclick="goBackMenu()">INDIETRO</button>
+    </div>
+
+    <script>
+      function aggiornaOpzioniCarte() {
+         let tipo = document.getElementById("cards-setup-tipo").value;
+         if(tipo === "briscola") {
+             document.getElementById("box-punti-scopa").style.display = "none";
+             document.getElementById("box-punti-briscola").style.display = "block";
+         } else {
+             document.getElementById("box-punti-scopa").style.display = "block";
+             document.getElementById("box-punti-briscola").style.display = "none";
+         }
+      }
+    </script>
+
+    <!-- MENU MULTIPLAYER: CREA O SCEGLI STANZA -->
+    <div id="multi-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 15px">
+        Lobby Multiplayer
+      </h2>
+
+      <div
+        style="
+          display: flex;
+          gap: 10px;
+          width: 100%;
+          max-width: 320px;
+          margin-bottom: 15px;
+        "
+      >
+        <button
+          class="btn"
+          style="font-size: 0.8rem; padding: 8px"
+          onclick="mostraCreaStanza()"
+        >
+          CREA NUOVA
+        </button>
+        <button
+          class="btn secondary"
+          style="font-size: 0.8rem; padding: 8px"
+          onclick="mostraListaStanze()"
+        >
+          UNISCITI
+        </button>
+      </div>
+
+      <!-- SEZIONE CREA STANZA -->
+      <div id="box-crea-stanza" style="width: 100%; max-width: 300px">
+        <div class="input-group">
+          <label>NOME DELLA TUA STANZA:</label>
+          <input type="text" id="create-room-name" value="Inserisci Nome Stanza" />
+        </div>
+        <div class="input-group">
+          <label>PASSWORD (FACOLTATIVA):</label>
+          <input type="password" id="create-room-pass" placeholder="Lascia vuoto se libera" />
+        </div>
+
+        <!-- 🔥 IMPOSTAZIONI AGGIUNTIVE MULTIPLAYER CARTE -->
+        <div id="multi-cards-options" style="display:none; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); margin-top:10px; margin-bottom: 10px;">
+          <label style="color: #c99c51; font-weight: bold; font-size: 0.8rem; display:block; margin-bottom: 5px;">REGOLE TAVOLO VERDE:</label>
+          
+          <select id="multi-cards-players" style="width:100%; padding:6px; margin-bottom:10px; font-size:0.8rem; font-weight:bold;">
+              <option value="2">2 Giocatori (1v1)</option>
+              <option value="4">4 Giocatori (A Coppie)</option>
+          </select>
+
+          <div style="display:flex; gap:10px;">
+              <select id="multi-cards-tipo" onchange="aggiornaMultiCarte()" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
+                  <option value="scopa">🧹 Scopa</option>
+                  <option value="briscola">👊 Briscola</option>
+              </select>
+              <select id="multi-cards-target" style="flex:1; padding:6px; font-size:0.8rem; font-weight:bold;">
+                  <option value="11">11 Punti</option>
+                  <option value="21">21 Punti</option>
+                  <option value="51">51 Punti</option>
+              </select>
+          </div>
+            <script>
+                function aggiornaMultiCarte() {
+                    let t = document.getElementById("multi-cards-tipo").value;
+                    let target = document.getElementById("multi-cards-target");
+                    if(t === "briscola") {
+                        target.innerHTML = "<option value='120'>120 Punti</option>";
+                    } else {
+                        target.innerHTML = "<option value='11'>11 Punti</option><option value='21'>21 Punti</option><option value='51'>51 Punti</option>";
+                    }
+                }
+            </script>
+        </div>
+
+        <!-- OPZIONI DI CATANOPOLI (Nascoste se giochi a carte) -->
+        <div class="input-group" id="multi-catanopoli-options" style="margin-top: 10px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: white; margin: 0; font-size: 0.8rem;">
+            <input type="checkbox" id="is-afk-room" style="width: 20px; height: 20px; accent-color: #c99c51;">
+            <b>Crea come SALA AFK (Video e Voce, Niente Tabellone)</b>
+          </label>
+        </div>
+        <button class="btn" style="margin-top: 10px" onclick="confermaCreaStanza()">
+          CREA E APRI LOBBY
+        </button>
+      </div>
+
+      <!-- SEZIONE LISTA STANZE DISPONIBILI -->
+      <div
+        id="box-lista-stanze"
+        style="display: none; width: 100%; max-width: 300px"
+      >
+        <label
+          style="
+            display: block;
+            font-size: 0.85rem;
+            color: var(--border-color);
+            margin-bottom: 6px;
+            font-weight: bold;
+            text-align: left;
+          "
+          >STANZE DISPONIBILI:</label
+        >
+        <div
+          id="rooms-container"
+          style="
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 10px;
+            text-align: left;
+            font-size: 0.9rem;
+          "
+        >
+          <i>Nessuna stanza attiva al momento...</i>
+        </div>
+        <div class="input-group" id="join-pass-box" style="display: none">
+          <label>INSERISCI PASSWORD:</label>
+          <input type="password" id="join-room-pass" />
+        </div>
+        <button
+          class="btn"
+          style="margin-top: 5px"
+          onclick="confermaEntraStanza()"
+        >
+          ENTRA NELLA STANZA
+        </button>
+        <button
+          class="btn secondary"
+          style="margin-top: 10px"
+          onclick="aggiornaLista()"
+        >
+          AGGIORNA LISTA
+        </button>
+      </div>
+
+      <button
+        class="btn secondary"
+        style="max-width: 300px; margin-top: 20px"
+        onclick="goBackMenu()"
+      >
+        INDIETRO
+      </button>
+    </div>
+
+    <!-- SALA D'ATTESA (Host e Guest) -->
+    <div id="waiting-room-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 10px">
+        Sala d'Attesa
+      </h2>
+      <h4 id="waiting-room-title" style="color: white; margin-bottom: 20px">
+        Stanza:
+      </h4>
+
+      <div
+        style="
+          background: rgba(0, 0, 0, 0.6);
+          padding: 15px;
+          border-radius: 8px;
+          width: 100%;
+          max-width: 300px;
+          margin-bottom: 20px;
+        "
+      >
+        <h4 style="color: #c99c51; margin-bottom: 10px">Giocatori Connessi:</h4>
+        <ul
+          id="waiting-players-list"
+          style="
+            list-style: none;
+            text-align: left;
+            color: white;
+            line-height: 1.8;
+          "
+        ></ul>
+      </div>
+
+      <button
+        id="btn-start-multi"
+        class="btn"
+        style="display: none; max-width: 300px; margin-bottom: 10px"
+        onclick="hostAvviaPartita()"
+      >
+        AVVIA PARTITA
+      </button>
+      <p
+        id="waiting-text"
+        style="
+          font-size: 0.85rem;
+          color: #aaa;
+          text-align: center;
+          max-width: 300px;
+        "
+      >
+        In attesa che l'Host avvii la partita...
+      </p>
+      <button
+        class="btn secondary"
+        style="max-width: 300px; margin-top: 20px"
+        onclick="quitGame()"
+      >
+        ESCI E TORNA AL MENU
+      </button>
+    </div>
+
+    <!-- OVERLAY MODAL -->
+    <div id="modal-overlay" class="modal-overlay">
+      <div class="modal-content" id="modal-content"></div>
+    </div>
+
+    <!-- MENU SALA AFK DIRETTA DAL MENU PRINCIPALE -->
+    <div id="afk-setup-menu" class="menu-screen" style="display: none">
+      <h2 style="color: var(--border-color); margin-bottom: 10px; font-size: 2rem;">☕ VIP Lounge</h2>
+      <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 15px; text-align: center; max-width: 300px;">Videochat di gruppo senza tabellone!</p>
+      
+      <div style="display: flex; gap: 10px; width: 100%; max-width: 320px; margin-bottom: 15px;">
+        <button class="btn" style="font-size: 0.8rem; padding: 8px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92; color: white;" onclick="mostraCreaAFK()">CREA LOUNGE</button>
+        <button class="btn secondary" style="font-size: 0.8rem; padding: 8px" onclick="mostraListaAFK()">UNISCITI</button>
+      </div>
+
+      <!-- SEZIONE CREA AFK -->
+      <div id="box-crea-afk" style="width: 100%; max-width: 300px">
+        <div class="input-group">
+          <label>NOME DELLA LOUNGE:</label>
+          <input type="text" id="afk-create-room-name" value="La mia Lounge" />
+        </div>
+        <div class="input-group">
+          <label>PASSWORD (FACOLTATIVA):</label>
+          <input type="password" id="afk-create-room-pass" placeholder="Lascia vuoto se libera" />
+        </div>
+        <button class="btn" style="margin-top: 10px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="confermaCreaAFK()">
+          CREA E APRI LOUNGE
+        </button>
+      </div>
+
+      <!-- SEZIONE LISTA AFK -->
+      <div id="box-lista-afk" style="display: none; width: 100%; max-width: 300px">
+        <label style="display: block; font-size: 0.85rem; color: var(--border-color); margin-bottom: 6px; font-weight: bold; text-align: left;">LOUNGE DISPONIBILI:</label>
+        <div id="afk-rooms-container" style="max-height: 150px; overflow-y: auto; background: rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; margin-bottom: 10px; text-align: left; font-size: 0.9rem;">
+          <i>Nessuna Lounge attiva...</i>
+        </div>
+        <div class="input-group" id="afk-join-pass-box" style="display: none">
+          <label>INSERISCI PASSWORD:</label>
+          <input type="password" id="afk-join-room-pass" />
+        </div>
+        <button class="btn" style="margin-top: 5px; background: linear-gradient(135deg, #8a2be2, #d81b60); border-color: #5a1b92;" onclick="confermaEntraAFK()">
+          ENTRA NELLA LOUNGE
+        </button>
+        <button class="btn secondary" style="margin-top: 10px" onclick="aggiornaLista()">
+          AGGIORNA LISTA
+        </button>
+      </div>
+
+      <button class="btn secondary" style="max-width: 300px; margin-top: 15px" onclick="goBackMenu()">
+        INDIETRO
+      </button>
+    </div>
+
+    <!-- PANNELLO IMPOSTAZIONI AUDIO UNIVERSALE -->
+    <div id="settings-modal" class="modal-overlay" style="z-index: 9999;">
+      <div class="modal-content" style="max-width: 350px;">
+        <h3 style="color: white; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">⚙️ IMPOSTAZIONI</h3>
+        <div style="margin-top: 20px; text-align: left;">
+          <label style="font-weight: bold; color: var(--border-color); display:block; margin-bottom:8px;">🎵 Volume Musica:</label>
+          <input type="range" id="setting-music-vol" min="0" max="1" step="0.01" value="0.15" oninput="aggiornaVolumi()" style="width: 100%; margin-bottom: 20px; cursor: pointer;">
+          
+          <label style="font-weight: bold; color: var(--border-color); display:block; margin-bottom:8px;">🔊 Volume Effetti & Voce:</label>
+          <input type="range" id="setting-sfx-vol" min="0" max="1" step="0.01" value="1.0" oninput="aggiornaVolumi()" style="width: 100%; margin-bottom: 25px; cursor: pointer;">
+        </div>
+        <button class="btn" style="width: 100%;" onclick="chiudiImpostazioni()">SALVA E CHIUDI</button>
+      </div>
+    </div>
+
+    <!-- SALA AFK UI DINAMICA -->
+    <div id="afk-ui" class="menu-screen" style="display: none; justify-content: flex-start; padding-top: 20px;">
+      <h2 style="color: var(--border-color); margin-bottom: 5px; font-size: 1.8rem;">SALA AFK ☕</h2>
+      <p style="color: #aaa; margin-bottom: 10px; font-size: 0.8rem; text-align:center;">Entra anche a partita iniziata!</p>
+      
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; max-width: 400px; margin-bottom: 15px;">
+        <button id="btn-afk-audio" class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.75rem;" onclick="accendiMedia(false)">🎙️ ATTIVA AUDIO</button>
+        <button id="btn-afk-video" class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.75rem;" onclick="accendiMedia(true)">📹 ATTIVA VIDEO</button>
+        <button class="btn secondary" style="width: 100%; color: #bd2a2a; border-color: #bd2a2a; font-size: 0.8rem;" onclick="quitGame()">❌ ESCI DALLA STANZA</button>
+      </div>
+
+      <!-- GRIGLIA VIDEO FLEXBOX (Si adatta al numero di persone) -->
+      <div id="afk-video-grid" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; align-content: center; gap: 10px; width: 100%; height: 60vh; overflow-y: auto; padding: 5px;">
+        <!-- Il tuo video locale -->
+        <div style="position: relative; border-radius: 12px; overflow: hidden; background: #000; border: 2px solid var(--border-color); flex: 1 1 40%; max-width: 48%; aspect-ratio: 3/4; min-height: 120px; display: none;" id="my-video-wrapper">
+          <video id="my-local-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+          <div style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold;">Tu</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UI CARTE SICILIANE (TAVOLO VERDE) -->
+    <div id="cards-ui">
+      
+      <button class="btn-exit" onclick="esciDaTavoloCarte()">✖</button>
+      <button onclick="apriImpostazioni()" style="position: absolute; top: 10px; right: 55px; z-index: 60; background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 35px; height: 35px; font-size: 1rem; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.8);">⚙️</button>
+
+      <h2 style="color: #c99c51; margin-top: 15px; margin-bottom: 0px; font-size: 1.5rem; text-shadow: 0 2px 4px black; text-align: center; border-bottom: 1px solid #c99c51; padding-bottom: 5px;">ADDIVETTITI</h2>
+      
+      <!-- AVVERSARIO -->
+      <div style="text-align: center; color: white; font-weight: bold; margin-top: 10px; font-size: 0.85rem;">Avversario: <span id="cards-opponent-name" style="color: #ff4444;">In attesa...</span></div>
+      <div class="opponent-hand" id="opponent-hand">
+        <div class="playing-card card-back"></div>
+        <div class="playing-card card-back"></div>
+        <div class="playing-card card-back"></div>
+      </div>
+
+      <!-- TAVOLO CENTRALE -->
+      <div class="cards-table-center" id="cards-table-center">
+        <!-- Spazi segnaposto vuoti per farti vedere l'effetto -->
+        <div class="card-slot"></div>
+        <div class="card-slot"></div>
+        <div class="card-slot"></div>
+        <div class="card-slot"></div>
+      </div>
+
+      <!-- LA TUA MANO -->
+      <div style="text-align: center; color: var(--border-color); font-weight: bold; margin-bottom: 5px; font-size: 0.85rem;">Le tue carte</div>
+      <div class="player-hand" id="my-hand">
+        <!-- Carte finte di prova, poi le genererà il JS -->
+        <div class="playing-card" style="transform: rotate(-8deg);">A 💰</div>
+        <div class="playing-card" style="z-index: 11; transform: translateY(-5px);">3 🗡️</div>
+        <div class="playing-card" style="transform: rotate(8deg);">Re 🍷</div>
+      </div>
+
+      <!-- HUD E PULSANTI AUDIO/VIDEO -->
+      <div class="cards-hud">
+         <div style="font-size: 0.8rem; font-weight: bold;">Punti: <span style="color:#44ff44;">0</span> - <span style="color:#ff4444;">0</span></div>
+         <div style="font-size: 0.8rem; color: #aaa;">Turno: <span id="cards-turn-indicator" style="color: white; font-weight: bold;">Attesa...</span></div>
+      </div>
+
+      <div id="cards-media-buttons" style="display: flex; gap: 5px; width: 100%; max-width: 400px; margin: 0 auto 20px auto; padding: 0 10px;">
+        <button id="btn-cards-audio" class="btn" style="flex: 1; background: #2c4a8a; border-color: #1a2a5a; font-size: 0.7rem; min-height: 40px; padding: 5px;" onclick="accendiMedia(false)">🎤 AUDIO</button>
+        <button id="btn-cards-video" class="btn" style="flex: 1; background: #3b7a3b; border-color: #2a5a2a; font-size: 0.7rem; min-height: 40px; padding: 5px;" onclick="accendiMedia(true)">📹 VIDEO</button>
+      </div>
+
+    </div>
+
+
+    <div id="game-ui">
+      <!-- Player invisibile per la musica -->
+      <audio id="bg-music"></audio>
+
+      <!-- BOTTONI SOCIAL E AGENZIA (IN GIOCO ALTO A SINISTRA) -->
+      <div style="position: absolute; top: 10px; left: 10px; z-index: 60; display: flex; flex-direction: column; gap: 6px;">
+        <a href="https://www.tiktok.com/t/ZMBmQArq8/" target="_blank" style="background: #2c4a8a; color: white; border: 1px solid white; border-radius: 15px; padding: 5px 10px; font-size: 0.65rem; font-weight: bold; text-decoration: none; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.8);">🚀 TOTALITY LIVE</a>
+        <div style="display: flex; gap: 5px;">
+          <a href="https://www.tiktok.com/@xxdonemusaxx?_r=1&_t=ZN-98azXsac5zi" target="_blank" title="Il mio TikTok" style="background: black; color: white; border: 1px solid var(--border-color); border-radius: 50%; width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; text-decoration: none; font-size: 0.8rem; box-shadow: 0 2px 5px rgba(0,0,0,0.8);">🎵</a>
+        </div>
+      </div>
+      
+      <button class="btn-exit" onclick="quitGame()">✖</button>
+      <!-- Pulsante Impostazioni in Partita -->
+      <button onclick="apriImpostazioni()" style="position: absolute; top: 10px; right: 55px; z-index: 60; background: rgba(0,0,0,0.8); border: 2px solid var(--border-color); color: white; border-radius: 50%; width: 38px; height: 38px; font-size: 1.2rem; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.8);">⚙️</button>
+      
+      <div id="game-wrapper">
+        <div class="board" id="game-board"></div>
+      </div>
+      <div class="bottom-hud">
+        <!-- CLASSIFICA SOLDI IN TEMPO REALE -->
+        <div id="scoreboard" style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; font-size:0.8rem; font-weight:bold; background:rgba(0,0,0,0.6); padding:6px; border-radius:6px; border:1px solid var(--border-color);"></div>
+        
+        <div id="game-log">Turno in attesa...</div>
+        <div class="action-row">
+          <div class="action-left">
+            <button
+              class="btn secondary"
+              onclick="openInventoryAndTrade()"
+              id="btn-inventory"
+              style="margin-bottom: 5px"
+            >
+              CARTE & SCAMBI<br /><span style="color: gold; font-size: 1.1em"
+                >💰 0€</span
+              >
+            </button>
+            <div style="display: flex; gap: 5px">
+              <button
+                class="btn"
+                onclick="accendiMicrofono()"
+                id="btn-voice"
+                style="
+                  flex: 1;
+                  background: #2c4a8a;
+                  border-color: #1a2a5a;
+                  font-size: 0.65rem;
+                  min-height: 35px;
+                  padding: 5px;
+                "
+              >
+                🎤 AUDIO
+              </button>
+              <button
+                class="btn"
+                onclick="dichiaraBancarottaManuale()"
+                style="
+                  flex: 1;
+                  background: #bd2a2a;
+                  border-color: #7a1515;
+                  font-size: 0.65rem;
+                  min-height: 35px;
+                  padding: 5px;
+                "
+              >
+                🏳️ ARRENDITI
+              </button>
+            </div>
+          </div>
+          <div class="action-right" id="action-buttons"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // FIX CRASH: Protezione sui loghi! Se non li trova, non fa crashare l'intero gioco.
+      let authLogo = document.getElementById("auth-logo-img");
+      if (authLogo) authLogo.onerror = function () { this.style.display = "none"; };
+      
+      let mainLogo = document.getElementById("menu-logo-img");
+      if (mainLogo) mainLogo.onerror = function () { this.style.display = "none"; };
+
+      const colors = ["#bd2a2a", "#2c4a8a", "#3b7a3b", "#d1b438"];
+      const botNames = ["Zio Turi", "Alfio", "Cettina"];
+
+      let players = [];
+      let currentPlayerIndex = 0;
+      let gameMode = "";
+      let botDifficulty = "medio";
+      let isMoving = false;
+      let currentDebt = 0;
+      let hasRolledDouble = false;
+
+      let socket = null;
+      let myRoom = "";
+      let myPlayerId = "";
+      let stanzaSelezionata = "";
+      let mainTimer = null; 
+      let tradeTimer = null; // Il Timer di 40s del menu scambi
+      let currentTimerBtn = null; // Ricorda quale bottone aveva il timer
+      let currentTimerSec = 0; // Ricorda i secondi rimasti
+      let currentTimerCallback = null; // Ricorda l'azione da fare
+
+      // ---- MOTORE ACCOUNT (REGISTRAZIONE/LOGIN LOCALE) ----
+      let utenteLoggato = null;
+
+      function caricaUtenti() {
+        let data = localStorage.getItem("catanopoli_utenti");
+        return data ? JSON.parse(data) : {};
+      }
+
+      function salvaUtenti(utenti) {
+        localStorage.setItem("catanopoli_utenti", JSON.stringify(utenti));
+      }
+
+      // GESTIONE OCCHIETTO PASSWORD
+      window.togglePassword = function() {
+        let passInput = document.getElementById("auth-password");
+        let icon = document.getElementById("toggle-pass-icon");
+        if (passInput.type === "password") {
+          passInput.type = "text";
+          icon.innerText = "🙈"; // Scimmietta chiusa
+        } else {
+          passInput.type = "password";
+          icon.innerText = "👁️"; // Occhietto aperto
+        }
+      };
+
+      window.eseguiRegistrazione = function() {
+        let user = document.getElementById("auth-username").value.trim();
+        let pass = document.getElementById("auth-password").value.trim();
+        if (!user || !pass) { alert("Inserisci Username e Password per registrarti!"); return; }
+        
+        let utenti = caricaUtenti();
+        if (utenti[user]) { alert("Questo Username esiste già! Scegline un altro o Accedi."); return; }
+        
+        utenti[user] = { password: pass, nomeInGioco: user, pedina: "🐘", foto: null };
+        salvaUtenti(utenti);
+        alert("✅ Registrazione completata! Ora sei connesso.");
+        eseguiLogin(user, pass); 
+      };
+
+      window.eseguiLogin = function(forzaUser, forzaPass) {
+        let user = forzaUser || document.getElementById("auth-username").value.trim();
+        let pass = forzaPass || document.getElementById("auth-password").value.trim();
+        if (!user || !pass) { alert("Inserisci Username e Password!"); return; }
+        
+        let utenti = caricaUtenti();
+        if (!utenti[user] || utenti[user].password !== pass) {
+          alert("❌ Username o Password errati!");
+          return;
+        }
+
+        // SALVATAGGIO "RICORDAMI" NEL TELEFONO
+        let rememberBox = document.getElementById("auth-remember");
+        if (rememberBox && rememberBox.checked) {
+          localStorage.setItem("catanopoli_ricordami", JSON.stringify({ user: user, pass: pass }));
+        } else if (!forzaUser) {
+          localStorage.removeItem("catanopoli_ricordami"); // Cancella se fai login senza spunta
+        }
+        
+        utenteLoggato = user;
+        document.getElementById("auth-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "flex";
+        
+        document.getElementById("setup-name").value = utenti[user].nomeInGioco;
+        document.getElementById("setup-token").value = utenti[user].pedina;
+        
+        document.getElementById("user-logged-info").style.display = "block";
+        document.getElementById("logged-username").innerText = user;
+
+        if (utenti[user].foto) {
+          myPhotoBase64 = utenti[user].foto;
+          let preview = document.getElementById("preview-foto");
+          preview.src = myPhotoBase64;
+          preview.style.display = "block";
+        } else {
+          myPhotoBase64 = null;
+          document.getElementById("preview-foto").style.display = "none";
+        }
+      };
+
+      // AUTO-LOGIN INVISIBILE E ISTANTANEO ALL'AVVIO
+      setTimeout(function() {
+        let ricordati = localStorage.getItem("catanopoli_ricordami");
+        if (ricordati) {
+          try {
+            let dati = JSON.parse(ricordati);
+            if (dati && dati.user && dati.pass) {
+              document.getElementById("auth-username").value = dati.user;
+              document.getElementById("auth-password").value = dati.pass;
+              let rememberBox = document.getElementById("auth-remember");
+              if(rememberBox) rememberBox.checked = true;
+              eseguiLogin(dati.user, dati.pass); // Entra direttamente senza click!
+            }
+          } catch(e){}
+        }
+      }, 100);
+
+      window.entraComeOspite = function() {
+        utenteLoggato = null;
+        document.getElementById("auth-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "flex";
+        document.getElementById("user-logged-info").style.display = "none";
+        document.getElementById("setup-name").value = "";
+        myPhotoBase64 = null;
+        document.getElementById("preview-foto").style.display = "none";
+      };
+
+      window.eseguiLogout = function() {
+        utenteLoggato = null;
+        myPhotoBase64 = null;
+        document.getElementById("preview-foto").style.display = "none";
+        document.getElementById("setup-name").value = "";
+        document.getElementById("auth-username").value = "";
+        document.getElementById("auth-password").value = "";
+        
+        // 🚪 Quando si disconnette volontariamente, il Ricordami viene distrutto!
+        localStorage.removeItem("catanopoli_ricordami"); 
+        let rememberBox = document.getElementById("auth-remember");
+        if(rememberBox) rememberBox.checked = false;
+
+        document.getElementById("main-menu").style.display = "none";
+        document.getElementById("user-logged-info").style.display = "none";
+        document.getElementById("auth-menu").style.display = "flex";
+      };
+
+      window.salvaProfiloSeLoggato = function(nome, pedina, fotoBase64) {
+        if (utenteLoggato) {
+          let utenti = caricaUtenti();
+          if(utenti[utenteLoggato]) {
+              utenti[utenteLoggato].nomeInGioco = nome;
+              utenti[utenteLoggato].pedina = pedina;
+              utenti[utenteLoggato].foto = fotoBase64;
+              salvaUtenti(utenti);
+          }
+        }
+      };
+
+      // ---- IMPOSTAZIONI GLOBALI AUDIO ----
+      let volumeMusicaGlobale = 0.15;
+      let volumeEffettiGlobale = 1.0;
+
+      window.apriImpostazioni = function() {
+        document.getElementById("settings-modal").style.display = "flex";
+      };
+      
+      window.chiudiImpostazioni = function() {
+        document.getElementById("settings-modal").style.display = "none";
+      };
+      
+      window.aggiornaVolumi = function() {
+        volumeMusicaGlobale = parseFloat(document.getElementById("setting-music-vol").value);
+        volumeEffettiGlobale = parseFloat(document.getElementById("setting-sfx-vol").value);
+        
+        let bgMusicEl = document.getElementById("bg-music");
+        if(bgMusicEl) {
+            bgMusicEl.volume = volumeMusicaGlobale;
+            if (volumeMusicaGlobale > 0 && bgMusicEl.paused) {
+                playRandomBgMusic(); // Se alzi il volume da 0, fa ripartire la musica in automatico!
+            } else if (volumeMusicaGlobale === 0) {
+                bgMusicEl.pause();
+            }
+        }
+      };
+
+      // ---- INIZIO LOGICA MUSICA ----
+      const bgTracks = ["musica1.mp3", "musica2.mp3", "musica3.mp3", "musica4.mp3", "musica5.mp3", "musica6.mp3"];
+      let currentTrackIndex = -1;
+
+      function playRandomBgMusic() {
+        if (volumeMusicaGlobale <= 0) return; // Non fa partire la musica se è stata messa a zero
+        let bgMusicEl = document.getElementById("bg-music");
+        let nextIndex;
+        do {
+          nextIndex = Math.floor(Math.random() * bgTracks.length);
+        } while (nextIndex === currentTrackIndex && bgTracks.length > 1);
+        
+        currentTrackIndex = nextIndex;
+        bgMusicEl.src = bgTracks[currentTrackIndex];
+        bgMusicEl.volume = volumeMusicaGlobale; 
+        let playPromise = bgMusicEl.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(e => console.log("Autoplay bloccato", e));
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("bg-music").addEventListener("ended", playRandomBgMusic);
+      });
+
+      // ---- MOTORE VOCALE (Il nostro "Piper Premium") ----
+      let speechUnlocked = false;
+
+      function sbloccaVoce() {
+        if (!speechUnlocked && 'speechSynthesis' in window) {
+          let sblocco = new SpeechSynthesisUtterance(''); 
+          window.speechSynthesis.speak(sblocco);
+          speechUnlocked = true;
+        }
+      }
+      document.addEventListener('click', sbloccaVoce, { once: true });
+      document.addEventListener('touchstart', sbloccaVoce, { once: true });
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = function() {
+          window.speechSynthesis.getVoices();
+        };
+      }
+
+      window.voceInEsecuzione = null; 
+
+      function leggiTesto(testo) {
+        if ('speechSynthesis' in window && volumeEffettiGlobale > 0) {
+          window.speechSynthesis.cancel(); 
+          window.speechSynthesis.resume(); 
+
+          let testoPulito = testo.replace(/€/g, " euro ");
+          try { testoPulito = testoPulito.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, ""); } catch(e) {} 
+
+          window.voceInEsecuzione = new SpeechSynthesisUtterance(testoPulito);
+          window.voceInEsecuzione.lang = 'it-IT';
+          window.voceInEsecuzione.rate = 1.0; 
+          window.voceInEsecuzione.pitch = 1.0; 
+          window.voceInEsecuzione.volume = volumeEffettiGlobale; // 🔊 Regola il volume della voce!
+
+          let voices = window.speechSynthesis.getVoices();
+          let googleVoice = voices.find(function(v) { return v.lang.includes('it') && v.name.includes('Google'); });
+          let italianVoice = voices.find(function(v) { return v.lang === 'it-IT' || v.lang === 'it_IT'; });
+
+          if (googleVoice) {
+            window.voceInEsecuzione.voice = googleVoice;
+          } else if (italianVoice) {
+            window.voceInEsecuzione.voice = italianVoice;
+          }
+
+          window.speechSynthesis.speak(window.voceInEsecuzione);
+        }
+      }
+
+      // ---- MOTORE EFFETTI SONORI (SFX) ----
+      window.suonaEffetto = function(nomeFile) {
+        if (volumeEffettiGlobale <= 0) return; // Blocca i suoni se il volume effetti è a zero
+        let sfx = new Audio(nomeFile + '.mp3');
+        sfx.volume = volumeEffettiGlobale;
+        sfx.play().catch(e => console.log("SFX bloccato dai permessi browser", e));
+      };
+
+      function avviaTimer(btnId, secondi, callbackTimeout) {
+        clearInterval(mainTimer);
+        currentTimerBtn = btnId;
+        currentTimerSec = secondi;
+        currentTimerCallback = callbackTimeout;
+
+        mainTimer = setInterval(function () {
+          currentTimerSec--;
+          let b = document.getElementById(currentTimerBtn);
+          if (b)
+            b.innerHTML = b.innerHTML.replace(/\(\d+s\)/, "(" + currentTimerSec + "s)");
+          if (currentTimerSec <= 0) {
+            clearInterval(mainTimer);
+            if (currentTimerCallback) currentTimerCallback();
+          }
+        }, 1000);
+      }
+
+      function bloccaTimer() {
+        clearInterval(mainTimer);
+      }
+
+      function hostAvviaPartita() {
+        if (socket) socket.emit("hostStartGame", { roomName: myRoom });
+      }
+
+      const properties = {
+        1: {
+          name: "P.zza Stesicoro",
+          group: "marrone",
+          price: 60,
+          rent: 2,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        3: {
+          name: "Via Plebiscito",
+          group: "marrone",
+          price: 60,
+          rent: 4,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        5: {
+          name: "Stazione Acquicella",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        12: {
+          name: "Bolletta Luce",
+          group: "societa",
+          price: 150,
+          rent: 20,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        15: {
+          name: "Stazione Centrale",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        25: {
+          name: "Stazione Borgo",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        28: {
+          name: "Bolletta Acqua",
+          group: "societa",
+          price: 150,
+          rent: 20,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        35: {
+          name: "Stazione Ognina",
+          group: "stazione",
+          price: 200,
+          rent: 25,
+          houseCost: 0,
+          houses: 0,
+          owner: null,
+        },
+        6: {
+          name: "Via Crociferi",
+          group: "celeste",
+          price: 100,
+          rent: 6,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        8: {
+          name: "P.zza Duomo",
+          group: "celeste",
+          price: 100,
+          rent: 6,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        9: {
+          name: "Via Etnea",
+          group: "celeste",
+          price: 120,
+          rent: 8,
+          houseCost: 50,
+          houses: 0,
+          owner: null,
+        },
+        11: {
+          name: "Via Umberto",
+          group: "viola",
+          price: 140,
+          rent: 10,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        13: {
+          name: "Corso Italia",
+          group: "viola",
+          price: 140,
+          rent: 10,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        14: {
+          name: "Viale Jonio",
+          group: "viola",
+          price: 160,
+          rent: 12,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        16: {
+          name: "Cibali",
+          group: "arancio",
+          price: 180,
+          rent: 14,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        18: {
+          name: "Viale Rapisardi",
+          group: "arancio",
+          price: 180,
+          rent: 14,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        19: {
+          name: "P.zza Eroi",
+          group: "arancio",
+          price: 200,
+          rent: 16,
+          houseCost: 100,
+          houses: 0,
+          owner: null,
+        },
+        21: {
+          name: "Via Sangiuliano",
+          group: "rosso",
+          price: 220,
+          rent: 18,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        23: {
+          name: "Teatro Massimo",
+          group: "rosso",
+          price: 220,
+          rent: 18,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        24: {
+          name: "P.zza Bellini",
+          group: "rosso",
+          price: 240,
+          rent: 20,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        26: {
+          name: "La Playa",
+          group: "giallo",
+          price: 260,
+          rent: 22,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        27: {
+          name: "Viale Kennedy",
+          group: "giallo",
+          price: 260,
+          rent: 22,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        29: {
+          name: "S.G. Li Cuti",
+          group: "giallo",
+          price: 280,
+          rent: 24,
+          houseCost: 150,
+          houses: 0,
+          owner: null,
+        },
+        31: {
+          name: "Via V. Emanuele",
+          group: "verde",
+          price: 300,
+          rent: 26,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        32: {
+          name: "Monastero Benedettini",
+          group: "verde",
+          price: 300,
+          rent: 26,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        34: {
+          name: "Castello Ursino",
+          group: "verde",
+          price: 320,
+          rent: 28,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        37: {
+          name: "Lungomare",
+          group: "blu",
+          price: 350,
+          rent: 35,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+        39: {
+          name: "Etna",
+          group: "blu",
+          price: 400,
+          rent: 50,
+          houseCost: 200,
+          houses: 0,
+          owner: null,
+        },
+      };
+
+      const tileHtmlMap = [
+        `<div class="tile corner" id="tile-0">VIA!<br><span style="color:green">+200</span></div>`,
+        `<div class="tile" id="tile-1"><div class="tile-header c-marrone"></div>Stesicoro<div class="price-tag">60€</div></div>`,
+        `<div class="tile" id="tile-2"><div class="emoji-icon">❓</div>Vediamo<br>che succede</div>`,
+        `<div class="tile" id="tile-3"><div class="tile-header c-marrone"></div>Plebiscito<div class="price-tag">60€</div></div>`,
+        `<div class="tile" id="tile-4"><div class="emoji-icon">🗑️</div>Paga la<br>Spazzatura</div>`,
+        `<div class="tile" id="tile-5"><div class="emoji-icon">🚆</div>Acquicella<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-6"><div class="tile-header c-celeste"></div>Crociferi<div class="price-tag">100€</div></div>`,
+        `<div class="tile" id="tile-7"><div class="emoji-icon">🎲</div>Speriamo<br>bene</div>`,
+        `<div class="tile" id="tile-8"><div class="tile-header c-celeste"></div>Duomo<div class="price-tag">100€</div></div>`,
+        `<div class="tile" id="tile-9"><div class="tile-header c-celeste"></div>Etnea<div class="price-tag">120€</div></div>`,
+        `<div class="tile corner" id="tile-10"><div class="jail-cell"><div class="emoji-icon" style="font-size:0.8rem; margin:0;">🚓</div>P. Lanza</div><div class="visiting">Passaggio</div></div>`,
+        `<div class="tile" id="tile-11"><div class="tile-header c-viola"></div>Umberto<div class="price-tag">140€</div></div>`,
+        `<div class="tile" id="tile-12"><div class="emoji-icon">💡</div>Bolletta Luce<div class="price-tag">150€</div></div>`,
+        `<div class="tile" id="tile-13"><div class="tile-header c-viola"></div>C. Italia<div class="price-tag">140€</div></div>`,
+        `<div class="tile" id="tile-14"><div class="tile-header c-viola"></div>V.le Jonio<div class="price-tag">160€</div></div>`,
+        `<div class="tile" id="tile-15"><div class="emoji-icon">🚆</div>Centrale<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-16"><div class="tile-header c-arancio"></div>Cibali<div class="price-tag">180€</div></div>`,
+        `<div class="tile" id="tile-17"><div class="emoji-icon">❓</div>Vediamo<br>che succede</div>`,
+        `<div class="tile" id="tile-18"><div class="tile-header c-arancio"></div>Rapisardi<div class="price-tag">180€</div></div>`,
+        `<div class="tile" id="tile-19"><div class="tile-header c-arancio"></div>P.zza Eroi<div class="price-tag">200€</div></div>`,
+        `<div class="tile corner" id="tile-20"><div class="emoji-icon">🍋</div>Chiosco del Borgo</div>`,
+        `<div class="tile" id="tile-21"><div class="tile-header c-rosso"></div>Sangiuliano<div class="price-tag">220€</div></div>`,
+        `<div class="tile" id="tile-22"><div class="emoji-icon">🎲</div>Speriamo<br>bene</div>`,
+        `<div class="tile" id="tile-23"><div class="tile-header c-rosso"></div>Teatro Max<div class="price-tag">220€</div></div>`,
+        `<div class="tile" id="tile-24"><div class="tile-header c-rosso"></div>P.zza Bellini<div class="price-tag">240€</div></div>`,
+        `<div class="tile" id="tile-25"><div class="emoji-icon">🚆</div>Borgo<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-26"><div class="tile-header c-giallo"></div>La Playa<div class="price-tag">260€</div></div>`,
+        `<div class="tile" id="tile-27"><div class="tile-header c-giallo"></div>V.le Kennedy<div class="price-tag">260€</div></div>`,
+        `<div class="tile" id="tile-28"><div class="emoji-icon">💧</div>Bolletta Acqua<div class="price-tag">150€</div></div>`,
+        `<div class="tile" id="tile-29"><div class="tile-header c-giallo"></div>S.G. Li Cuti<div class="price-tag">280€</div></div>`,
+        `<div class="tile corner" id="tile-30"><div class="emoji-icon">🚓</div>Trasferito in<br>P.zza Lanza</div>`,
+        `<div class="tile" id="tile-31"><div class="tile-header c-verde"></div>V. Emanuele<div class="price-tag">300€</div></div>`,
+        `<div class="tile" id="tile-32"><div class="tile-header c-verde"></div>Benedettini<div class="price-tag">300€</div></div>`,
+        `<div class="tile" id="tile-33"><div class="emoji-icon">❓</div>Vediamo<br>che succede</div>`,
+        `<div class="tile" id="tile-34"><div class="tile-header c-verde"></div>C. Ursino<div class="price-tag">320€</div></div>`,
+        `<div class="tile" id="tile-35"><div class="emoji-icon">🚆</div>Ognina<div class="price-tag">200€</div></div>`,
+        `<div class="tile" id="tile-36"><div class="emoji-icon">🎲</div>Speriamo<br>bene</div>`,
+        `<div class="tile" id="tile-37"><div class="tile-header c-blu"></div>Lungomare<div class="price-tag">350€</div></div>`,
+        `<div class="tile" id="tile-38"><div class="emoji-icon">🥷</div>Rapina</div>`,
+        `<div class="tile" id="tile-39"><div class="tile-header c-blu"></div>Etna<div class="price-tag">400€</div></div>`,
+        `<div class="center-board"><img id="center-logo" src="logo-catanopoli.png" alt="Logo" style="transition: opacity 0.3s;"><video id="center-video" playsinline style="display:none; position:absolute; width:100%; height:100%; object-fit:cover; z-index:3; border-radius:8px;"></video><div id="center-zoom" style="display:none; position:absolute; top:8%; z-index:4; width:55%; height:60%; background:var(--tile-bg); border:4px solid var(--border-color); border-radius:12px; flex-direction:column; align-items:center; justify-content:space-between; text-align:center; box-shadow: 0 15px 40px rgba(0,0,0,0.9); overflow:hidden;"></div><div id="dice-result" style="z-index:5;"></div></div>`,
+      ];
+
+      const tileNames = [
+        "VIA!",
+        "P.zza Stesicoro",
+        "Vediamo che succede",
+        "Via Plebiscito",
+        "Paga la Spazzatura",
+        "Stazione Acquicella",
+        "Via Crociferi",
+        "Speriamo bene",
+        "P.zza Duomo",
+        "Via Etnea",
+        "Passaggio / Piazza Lanza",
+        "Via Umberto",
+        "Bolletta della Luce",
+        "Corso Italia",
+        "Viale Jonio",
+        "Stazione Centrale",
+        "Cibali",
+        "Vediamo che succede",
+        "Viale Rapisardi",
+        "P.zza Eroi",
+        "Chiosco del Borgo",
+        "Via Sangiuliano",
+        "Speriamo bene",
+        "Teatro Massimo",
+        "P.zza Bellini",
+        "Stazione Borgo",
+        "La Playa",
+        "Viale Kennedy",
+        "Bolletta dell'Acqua",
+        "S.G. Li Cuti",
+        "Trasferito in Piazza Lanza",
+        "Via V. Emanuele",
+        "Monastero Benedettini",
+        "Vediamo che succede",
+        "Castello Ursino",
+        "Stazione Ognina",
+        "Speriamo bene",
+        "Lungomare",
+        "Rapina",
+        "Etna",
+      ];
+
+      const mazzoSperiamoBene = [
+        {
+          text: "Zio Turi ti ha lasciato la mancia per l'onomastico! Ritira 50€.",
+          action: (p) => { p.money += 50; }
+        },
+        {
+          text: "Hai venduto abusivamente i biglietti del Catania fuori dal Cibali. Incassa 100€.",
+          action: (p) => { p.money += 100; }
+        },
+        {
+          text: "Rimborso dalla bolletta della luce per i continui distacchi. Ritira 20€.",
+          action: (p) => { p.money += 20; }
+        },
+        {
+          text: "Sei il re della pescheria! Hai venduto tuttu pisci. Ritira 150€.",
+          action: (p) => { p.money += 150; }
+        },
+        {
+          text: "Sant'Agata è vicina, hai montato il banchetto del torrone e fatto affari d'oro. Incassa 100€.",
+          action: (p) => { p.money += 100; }
+        },
+        {
+          text: "Hai trovato parcheggio subito in Via Etnea senza posteggiatore! Trovi 10€ a terra.",
+          action: (p) => { p.money += 10; }
+        },
+        {
+          text: "Hai vinto al lotto giocato nella ricevitoria al Borgo. Ritira 200€.",
+          action: (p) => { p.money += 200; }
+        },
+        {
+          text: "Concorso di bellezza a La Playa, hai vinto il primo premio. Ritira 50€.",
+          action: (p) => { p.money += 50; }
+        },
+        {
+          text: "Hai affittato la casa vacanze ai turisti in Via Crociferi. Incassa 80€.",
+          action: (p) => { p.money += 80; }
+        },
+        {
+          text: "Scommessa vinta sui cavalli alla sala corse. Prendi 60€.",
+          action: (p) => { p.money += 60; }
+        },
+        {
+          text: "Il tuo b&b a San Giovanni Li Cuti è pieno. Ritira 100€.",
+          action: (p) => { p.money += 100; }
+        },
+        {
+          text: "Hai fatto l'aiuto cuoco da Fud e ti hanno dato il bonus. Ritira 40€.",
+          action: (p) => { p.money += 40; }
+        },
+        {
+          text: "Hai venduto vecchie cianfrusaglie alla Fiera dei Morti. Prendi 70€.",
+          action: (p) => { p.money += 70; }
+        },
+        {
+          text: "Hai organizzato un torneo di calcetto al Cibalino e hai vinto la quota. Ritira 90€.",
+          action: (p) => { p.money += 90; }
+        },
+        {
+          text: "Sei stato eletto Catanese del Mese. Premio di 150€.",
+          action: (p) => { p.money += 150; }
+        },
+        // --- NUOVE CARTE AGGIUNTE ---
+        {
+          text: "Hai offerto un selz limone e sale a tutta la piazza! Tutti ti ringraziano e ti regalano 30€.",
+          action: (p) => { p.money += 30; }
+        },
+        {
+          text: "Hai trovato un compratore per la tua vecchia Lapa. Incassa 120€.",
+          action: (p) => { p.money += 120; }
+        },
+        {
+          text: "Hai cucinato la migliore carne di cavallo di Via Plebiscito. Premio della critica: 80€.",
+          action: (p) => { p.money += 80; }
+        },
+        {
+          text: "Un turco ti ha scambiato per un attore famoso al Teatro Massimo e ti ha dato una mancia di 100€.",
+          action: (p) => { p.money += 100; }
+        },
+        {
+          text: "Hai organizzato una scampagnata sull'Etna e tutti hanno pagato la quota in anticipo. Prendi 110€.",
+          action: (p) => { p.money += 110; }
+        }
+      ];
+
+      const mazzoVediamoCheSuccede = [
+        {
+          text: "Hai posteggiato male al Duomo. Multa dei vigili! Paga 50€.",
+          action: (p) => { p.money -= 50; }
+        },
+        {
+          text: "Pioggia di cenere vulcanica dall'Etna! Devi per forza lavare la macchina. Paga 20€.",
+          action: (p) => { p.money -= 20; }
+        },
+        {
+          text: "Andavi troppo forte in Circonvallazione. Autovelox! Paga 100€.",
+          action: (p) => { p.money -= 100; }
+        },
+        {
+          text: "Hai fumato crack alle 4 di notte e ti hanno beccato. Vai in Piazza Lanza a riposare.",
+          action: (p) => {
+            p.position = 10;
+            p.inJail = true;
+            p.jailTurns = 0;
+          }
+        },
+        {
+          text: "Hai bucato una ruota nella lapa per andare ad Acitrezza. Paga 40€ dal gommista.",
+          action: (p) => { p.money -= 40; }
+        },
+        {
+          text: "Ti hanno clonato il bancomat in Corso Italia. Perdi 150€.",
+          action: (p) => { p.money -= 150; }
+        },
+        {
+          text: "Allagamento al Villaggio Santa Maria Goretti, devi riparare lo scooter. Paga 80€.",
+          action: (p) => { p.money -= 80; }
+        },
+        {
+          text: "Controllo a sorpresa della Finanza nel tuo chiosco. Multa di 200€.",
+          action: (p) => { p.money -= 200; }
+        },
+        {
+          text: "Hai fatto macello alla festa della birra, devi risarcire i danni. Paga 50€.",
+          action: (p) => { p.money -= 50; }
+        },
+        {
+          text: "L'AMT ha scioperato, hai dovuto prendere un taxi abusivo. Paga 30€.",
+          action: (p) => { p.money -= 30; }
+        },
+        {
+          text: "Hai perso il portafoglio mentre mangiavi la carne di cavallo in Via Plebiscito. Paga 60€.",
+          action: (p) => { p.money -= 60; }
+        },
+        {
+          text: "Riparazioni urgenti per il tuo appartamento. Paga 100€.",
+          action: (p) => { p.money -= 100; }
+        },
+        {
+          text: "Hai pagato troppo il pesce spada perché non hai contrattato. Paga 20€.",
+          action: (p) => { p.money -= 20; }
+        },
+        {
+          text: "Hai sbattuto contro il muretto al Lungomare Ognina. Carrozziere: 70€.",
+          action: (p) => { p.money -= 70; }
+        },
+        {
+          text: "Il vigile ti ha beccato col motorino senza casco a San Cristoforo. Multa 120€.",
+          action: (p) => { p.money -= 120; }
+        },
+        // --- NUOVE CARTE AGGIUNTE ---
+        {
+          text: "Hai dimenticato la granita al sole ed è diventata acqua calda. Compra un'altra granita: 15€.",
+          action: (p) => { p.money -= 15; }
+        },
+        {
+          text: "Il posteggiatore abusivo in Viale Jonio voleva 5€ e non avevi monete, hai dovuto dargli 10€.",
+          action: (p) => { p.money -= 10; }
+        },
+        {
+          text: "Ti si è spaccata la marmitta del motorino mentre salivi a Nicolosi. Meccanico: 90€.",
+          action: (p) => { p.money -= 90; }
+        },
+        {
+          text: "Hai preso la multa perché sei passato nella corsia del BRT senza accorgertene. Paga 70€.",
+          action: (p) => { p.money -= 70; }
+        },
+        {
+          text: "Ti sei scordato di pagare il pizzo al barista del borgo. Risarcimento: 130€.",
+          action: (p) => { p.money -= 130; }
+        }
+      ];
+      const diceFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+
+      // Frasario Catanese DOC per Piper
+      const frasiCatanesi = [
+        "Come siamo combinati fratello?",
+        "Vita, m'u spacchi un gnustel?",
+        "Vita, ca semu!",
+        "Lancia sti dadi mbare, ca fici notte!",
+        "Avviamo i mutura!",
+        "Vita, stai facendo i soldi ca pala!",
+        "Sciogli i cani!",
+        "Vita, mi sta calando un sonno, lancia!",
+        "Avaia zucchero",
+        "Ma chi si pazzu",
+        "A mia u sai chi ma fari",
+        "A tia ti nesciu u giovedi indiferrenziato",
+        "Si chiu vecchiu do manicu da prefettura",
+        "animali cu l' occhi aiutiti",
+        "Fozza ca c'è me nanna o spitali sta patturennu",
+        "Ti ittassi unni iettunu i gnissaturi o vittorio",
+        "Fozza ri drocu mu collu"
+      ];
+
+      function renderBoard() {
+        const board = document.getElementById("game-board");
+        board.innerHTML = tileHtmlMap.join("");
+        for (let i = 0; i < 40; i++) {
+          let t = document.getElementById("tile-" + i);
+          if (t) {
+            let tc = document.createElement("div");
+            tc.className = "tokens-container";
+            tc.id = "tc-" + i;
+            t.appendChild(tc);
+            // Modifica per renderle cliccabili
+            t.style.cursor = "pointer";
+            t.onclick = function () {
+              mostraInfoTerreno(i);
+            };
+          }
+        }
+      }
+
+      // 🔥 Variabile globale per ricordare a cosa stiamo giocando
+      window.giocoSelezionato = "catanopoli"; 
+
+      function showSetup(mode) {
+        gameMode = mode;
+        document.getElementById("main-menu").style.display = "none";
+        
+        if (mode === "single") {
+          document.getElementById("bot-setup-menu").style.display = "flex";
+        } else if (mode === "afk") {
+          document.getElementById("afk-setup-menu").style.display = "flex";
+        } else if (mode === "cards_menu") {
+          document.getElementById("cards-setup-menu").style.display = "flex";
+          if(typeof aggiornaOpzioniCarte === 'function') aggiornaOpzioniCarte();
+        } else {
+          document.getElementById("multi-setup-menu").style.display = "flex";
+          // 🔥 MOSTRA LE OPZIONI DELLE CARTE SOLO SE HAI SCELTO QUEL GIOCO
+          let optCards = document.getElementById("multi-cards-options");
+          let optCatanopoli = document.getElementById("multi-catanopoli-options");
+          if(optCards) optCards.style.display = (window.giocoSelezionato === "carte") ? "block" : "none";
+          if(optCatanopoli) optCatanopoli.style.display = (window.giocoSelezionato === "catanopoli") ? "block" : "none";
+          
+          mostraCreaStanza();
+        }
+      }
+
+      window.esciDaTavoloCarte = function() {
+        if (confirm("Vuoi abbandonare il tavolo e tornare al Menu?")) {
+           quitGame(); // Chiude tutto in modo pulito e torna alla home!
+        }
+      };
+
+      function goBackMenu() {
+        document.getElementById("bot-setup-menu").style.display = "none";
+        if (document.getElementById("cards-setup-menu")) document.getElementById("cards-setup-menu").style.display = "none";
+        if (document.getElementById("multi-setup-menu")) document.getElementById("multi-setup-menu").style.display = "none";
+        if (document.getElementById("afk-setup-menu")) document.getElementById("afk-setup-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "flex";
+      }
+
+      // ---- MENU MULTIPLAYER NORMALE ----
+      function mostraCreaStanza() {
+        document.getElementById("box-crea-stanza").style.display = "block";
+        document.getElementById("box-lista-stanze").style.display = "none";
+      }
+      function mostraListaStanze() {
+        document.getElementById("box-crea-stanza").style.display = "none";
+        document.getElementById("box-lista-stanze").style.display = "block";
+        aggiornaLista();
+      }
+
+      // ---- MENU AFK LOUNGE ----
+      window.mostraCreaAFK = function() {
+        document.getElementById("box-crea-afk").style.display = "block";
+        document.getElementById("box-lista-afk").style.display = "none";
+      };
+      window.mostraListaAFK = function() {
+        document.getElementById("box-crea-afk").style.display = "none";
+        document.getElementById("box-lista-afk").style.display = "block";
+        aggiornaLista();
+      };
+
+      function aggiornaLista() {
+        if (typeof io !== "undefined") {
+          if (!socket) socket = io();
+
+          socket.off("roomList"); 
+          socket.on("roomList", function (roomsList) {
+            let normalContainer = document.getElementById("rooms-container");
+            let afkContainer = document.getElementById("afk-rooms-container");
+
+            let normalRooms = roomsList.filter(r => !r.name.includes("[AFK]"));
+            let afkRooms = roomsList.filter(r => r.name.includes("[AFK]"));
+
+            if (normalContainer) {
+              if (normalRooms.length === 0) {
+                normalContainer.innerHTML = "<i>Nessuna stanza attiva...</i>";
+              } else {
+                normalContainer.innerHTML = normalRooms.map(r => {
+                  let iconaLock = r.hasPass ? "🔒" : "";
+                  let trueName = r.rawName || r.name.replace("🃏 ", "").replace("🎲 ", "");
+                  let limite = r.maxPlayers || (r.gioco === 'carte' ? 2 : 4);
+                  return "<div class='room-item' onclick='selezionaStanza(\"" + trueName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + r.name + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/" + limite + ")</span></div>";
+                }).join("");
+              }
+            }
+
+            if (afkContainer) {
+              if (afkRooms.length === 0) {
+                afkContainer.innerHTML = "<i>Nessuna Lounge attiva...</i>";
+              } else {
+                afkContainer.innerHTML = afkRooms.map(r => {
+                  let iconaLock = r.hasPass ? "🔒" : "";
+                  let cleanName = r.name.replace("[AFK] ", "");
+                  let trueName = r.rawName || r.name;
+                  return "<div class='afk-room-item' onclick='selezionaStanzaAFK(\"" + trueName + "\", " + r.hasPass + ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'><span><b>" + cleanName + "</b> " + iconaLock + "</span><span style='font-size:0.8rem; color:#aaa;'>(" + r.playersCount + "/4)</span></div>";
+                }).join("");
+              }
+            }
+          });
+          socket.emit("getRooms");
+        }
+      }
+
+      function selezionaStanza(nomeStanza, haPassword) {
+        stanzaSelezionata = nomeStanza;
+        document.querySelectorAll(".room-item").forEach((el) => (el.style.background = "transparent"));
+        event.currentTarget.style.background = "rgba(201, 156, 81, 0.3)";
+        document.getElementById("join-pass-box").style.display = haPassword ? "block" : "none";
+      }
+
+      window.selezionaStanzaAFK = function(nomeStanza, haPassword) {
+        stanzaSelezionata = nomeStanza;
+        document.querySelectorAll(".afk-room-item").forEach((el) => (el.style.background = "transparent"));
+        event.currentTarget.style.background = "rgba(138, 43, 226, 0.3)";
+        document.getElementById("afk-join-pass-box").style.display = haPassword ? "block" : "none";
+      };
+
+      function confermaCreaStanza() {
+        if (typeof io === "undefined") { alert("Errore connessione. Riprova!"); return; }
+        if (!socket) socket = io();
+        myRoom = document.getElementById("create-room-name").value.trim();
+        let roomPass = document.getElementById("create-room-pass").value;
+        if (!myRoom) { alert("Inserisci un nome!"); return; }
+        avviaIngresso(myRoom, roomPass, parseInt(document.getElementById("setup-money").value), false);
+      }
+
+      window.confermaCreaAFK = function() {
+        if (typeof io === "undefined") { alert("Errore connessione. Riprova!"); return; }
+        if (!socket) socket = io();
+        let nomeStanza = document.getElementById("afk-create-room-name").value.trim();
+        let passStanza = document.getElementById("afk-create-room-pass").value;
+        if (!nomeStanza) { alert("Inserisci un nome!"); return; }
+        myRoom = "[AFK] " + nomeStanza; 
+        avviaIngresso(myRoom, passStanza, 0, false);
+      };
+
+      function confermaEntraStanza() {
+        if (!stanzaSelezionata) { alert("Seleziona una stanza!"); return; }
+        if (typeof io === "undefined") { alert("Errore di connessione."); return; }
+        if (!socket) socket = io();
+        myRoom = stanzaSelezionata;
+        let roomPass = document.getElementById("join-room-pass").value;
+        avviaIngresso(myRoom, roomPass, parseInt(document.getElementById("setup-money").value), true);
+      }
+
+      window.confermaEntraAFK = function() {
+        if (!stanzaSelezionata) { alert("Seleziona una Lounge!"); return; }
+        if (typeof io === "undefined") { alert("Errore di connessione."); return; }
+        if (!socket) socket = io();
+        myRoom = stanzaSelezionata;
+        let roomPass = document.getElementById("afk-join-room-pass").value;
+        avviaIngresso(myRoom, roomPass, 0, true);
+      };
+
+      // Funzione centralizzata per l'ingresso
+      function avviaIngresso(roomTarget, passTarget, money, isJoin) {
+        gameMode = "multi";
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
+        const pToken = document.getElementById("setup-token").value;
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
+
+        if (isJoin) {
+          socket.emit("joinSpecificRoom", { roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money });
+        } else {
+          let mCarteTipo = document.getElementById("multi-cards-tipo");
+          let mCartePunti = document.getElementById("multi-cards-target");
+          let mCartePlayers = document.getElementById("multi-cards-players"); // 🔥 LEGGIAMO IL NUMERO DI GIOCATORI
+          
+          let tCarte = mCarteTipo ? mCarteTipo.value : "scopa";
+          let tPunti = mCartePunti ? parseInt(mCartePunti.value) : 11;
+          let tPlayers = mCartePlayers ? parseInt(mCartePlayers.value) : 2;
+          
+          socket.emit("createRoom", { 
+              roomName: roomTarget, roomPass: passTarget, name: pName, startMoney: money, 
+              gioco: window.giocoSelezionato, tipoCarte: tCarte, targetCarte: tCarte === "briscola" ? 120 : tPunti,
+              numPlayers: tPlayers // 🔥 PASSATO AL SERVER
+          });
+        }
+        
+        document.getElementById("afk-setup-menu").style.display = "none";
+        document.getElementById("multi-setup-menu").style.display = "none";
+        inizializzaEventiMultiplayer();
+      }
+
+      function inizializzaEventiMultiplayer() {
+        document.getElementById("multi-setup-menu").style.display = "none";
+
+        socket.off("roomError");
+        socket.off("roomList");
+        socket.off("waitingRoomUpdate");
+        socket.off("gameStarted");
+        socket.off("updateState");
+        socket.off("diceRolled");
+        socket.off("stateSynced");
+        socket.off("receiveTradeOffer");
+        socket.off("tradeResult");
+        socket.off("userVoiceReady");
+
+        socket.on("roomError", function (msg) {
+          alert(msg);
+          quitGame();
+        });
+
+        socket.on("roomList", function (roomsList) {
+          let container = document.getElementById("rooms-container");
+          if (!container) return;
+          if (roomsList.length === 0) {
+            container.innerHTML = "<i>Nessuna stanza attiva al momento...</i>";
+            return;
+          }
+
+          container.innerHTML = roomsList
+            .map(function (r) {
+              let iconaLock = r.hasPass ? "🔒" : "";
+              return (
+                "<div class='room-item' onclick='selezionaStanza(\"" +
+                r.name +
+                '", ' +
+                r.hasPass +
+                ")' style='padding: 6px; border-bottom: 1px solid #444; cursor: pointer; display:flex; justify-content:space-between;'>" +
+                "<span><b>" +
+                r.name +
+                "</b> " +
+                iconaLock +
+                "</span><span style='font-size:0.8rem; color:#aaa;'>(" +
+                r.playersCount +
+                "/4)</span></div>"
+              );
+            })
+            .join("");
+        });
+
+        // GESTIONE SALA D'ATTESA (CON FIX LIMITI GIOCATORI E AFK)
+        socket.on("waitingRoomUpdate", function (roomData) {
+          document.getElementById("waiting-room-menu").style.display = "flex";
+          document.getElementById("waiting-room-title").innerText = "Stanza: " + myRoom;
+
+          let listaGiocatoriHTML = roomData.players.map(function (p, i) {
+              return "<li>" + (i + 1) + ". <span style='color:" + p.color + "'>" + p.name + "</span> " + (p.id === roomData.hostId ? "👑" : "") + "</li>";
+          }).join("");
+          document.getElementById("waiting-players-list").innerHTML = listaGiocatoriHTML;
+
+          if (socket.id === roomData.hostId) {
+            document.getElementById("waiting-text").style.display = "none";
+            let btnAvvia = document.getElementById("btn-start-multi");
+            btnAvvia.style.display = "flex";
+
+            // 🔥 LOGICA DINAMICA: Calcola quanti giocatori servono in base al gioco!
+            let minPlayers = 2; // Di base servono minimo 2 persone
+            let maxPlayers = 4; // Di base il limite massimo è 4
+
+            if (roomData.gioco === "carte") {
+                maxPlayers = 2; // Le carte si giocano in 2 massimo
+            } else if (myRoom.includes("[AFK]")) {
+                minPlayers = 1; // 💡 L'Host può aprire la Sala AFK anche da solo e aspettare dentro in video!
+                maxPlayers = 4;
+            }
+
+            let current = roomData.players.length;
+
+            if (current < minPlayers) {
+                btnAvvia.disabled = true;
+                btnAvvia.innerHTML = "ATTENDI GIOCATORI (" + current + "/" + maxPlayers + ")...";
+            } else {
+                btnAvvia.disabled = false;
+                btnAvvia.innerHTML = "AVVIA PARTITA (" + current + "/" + maxPlayers + ")";
+            }
+
+          } else {
+            document.getElementById("waiting-text").style.display = "block";
+            document.getElementById("btn-start-multi").style.display = "none";
+          }
+        });
+
+        // INIZIO PARTITA O SALA AFK!
+        socket.on("gameStarted", function (roomData) {
+          document.getElementById("waiting-room-menu").style.display = "none";
+          
+          if (myRoom.includes("[AFK]")) {
+            document.getElementById("afk-ui").style.display = "flex";
+            inizializzaPeerPassivo(); // 🔥 ASCOLTO INVISIBILE
+          } else if (roomData.gioco === "carte") {
+            // 🔥 MULTIPLAYER CARTE: Apre il Tavolo Verde!
+            document.getElementById("cards-ui").style.display = "flex";
+            if (typeof avviaPartitaCarte === "function") {
+                avviaPartitaCarte(roomData.tipoCarte, true, roomData); 
+            }
+            if (!myPeer) accendiMicrofono(); // Audio automatico
+          } else {
+            // MULTIPLAYER CATANOPOLI
+            document.getElementById("game-ui").style.display = "flex";
+            renderBoard();
+            applicaStatoGioco(roomData);
+            if (!myPeer) accendiMicrofono(); 
+          }
+        });
+
+        socket.on("updateState", function (serverData) {
+          applicaStatoGioco(serverData);
+        });
+        socket.on("diceRolled", function (data) {
+          if (data.playerId !== socket.id) animateDice(data.d1, data.d2, function () {});
+        });
+
+        socket.on("stateSynced", function (data) {
+          players = data.players;
+          Object.keys(data.properties).forEach(function (k) {
+            properties[k].owner = data.properties[k].owner;
+            properties[k].houses = data.properties[k].houses;
+          });
+          if (data.logMsg) document.getElementById("game-log").innerHTML = data.logMsg;
+          
+          // 🔥 FIX RITARDO: SE ENTRI A PARTITA AFK INIZIATA, TI PORTA SUBITO DENTRO!
+          if (myRoom.includes("[AFK]")) {
+             document.getElementById("main-menu").style.display = "none";
+             document.getElementById("waiting-room-menu").style.display = "none";
+             document.getElementById("multi-setup-menu").style.display = "none";
+             document.getElementById("game-ui").style.display = "none";
+             document.getElementById("afk-ui").style.display = "flex";
+             inizializzaPeerPassivo(); 
+          } else {
+             updateTokens();
+          }
+        });
+
+        socket.on("receiveTradeOffer", function (data) {
+          if (String(data.targetId) === String(socket.id)) mostraPopupRicezioneScambio(data);
+        });
+
+        socket.on("tradeResult", function (data) {
+          if (String(data.offerta.fromId) === String(socket.id)) {
+            if (data.accepted) {
+              alert(data.targetName + " ha ACCETTATO lo scambio!");
+              let pRicevente = players.find(p => String(p.id) === String(data.targetId));
+              let pOfferente = players.find(p => String(p.id) === String(data.offerta.fromId));
+
+              pRicevente.money -= data.offerta.requestMoney;
+              pRicevente.money += data.offerta.offerMoney;
+              pOfferente.money += data.offerta.requestMoney;
+              pOfferente.money -= data.offerta.offerMoney;
+
+              data.offerta.mySelected.forEach(k => properties[k].owner = data.targetId);
+              data.offerta.hisSelected.forEach(k => {
+                properties[k].owner = data.offerta.fromId;
+                document.getElementById("tile-" + k).style.boxShadow = "inset 0 0 10px " + pOfferente.color;
+              });
+
+              updateTokens();
+              socket.emit("syncAction", { room: myRoom, players: players, properties: properties, logMsg: "Scambio concluso tra " + data.offerta.fromName + " e " + data.targetName });
+            } else {
+              alert(data.targetName + " ha RIFIUTATO lo scambio.");
+            }
+          }
+        });
+
+        socket.on("userVoiceReady", function (peerIdTarget) {
+          if (myPeer) {
+            let streamDaInviare = (typeof myAudioStream !== 'undefined' && myAudioStream) ? myAudioStream : window.fakeStream;
+            const call = myPeer.call(peerIdTarget, streamDaInviare); 
+            if(call) {
+                call.on("stream", function (userAudioStream) {
+                  aggiungiMediaPlayer(peerIdTarget, userAudioStream, call);
+                });
+                // 🔥 ELIMINA IL FANTASMA SE L'AVVERSARIO CHIUDE/RIAPRE LA CHIAMATA
+                call.on("close", pulisciFantasma);
+                call.on("error", pulisciFantasma);
+            }
+          }
+        });
+      }
+      // ---- MOTORE FOTO PROFILO ----
+      let myPhotoBase64 = null;
+      window.elaboraFoto = function(event) {
+        let file = event.target.files[0];
+        if (!file) return;
+        let reader = new FileReader();
+        reader.onload = function(e) {
+          let img = new Image();
+          img.onload = function() {
+            // Comprime la foto a 100x100 pixel per renderla leggerissima sul server!
+            let canvas = document.createElement("canvas");
+            let ctx = canvas.getContext("2d");
+            canvas.width = 100; canvas.height = 100;
+            let minDim = Math.min(img.width, img.height);
+            let sx = (img.width - minDim) / 2; let sy = (img.height - minDim) / 2;
+            ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, 100, 100);
+            
+            myPhotoBase64 = canvas.toDataURL("image/jpeg", 0.6); // Qualità 60% (Leggera e scattante)
+            let preview = document.getElementById("preview-foto");
+            preview.src = myPhotoBase64;
+            preview.style.display = "block";
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      function applicaStatoGioco(serverData) {
+        players = serverData.players;
+        currentPlayerIndex = serverData.turnIndex;
+        myPlayerId = socket.id;
+
+        // INIEZIONE FOTOGRAFIA: Se l'ho scattata, la piazzo sul mio personaggio e avviso tutti gli altri
+        let mioP = players.find(function(p) { return String(p.id) === String(socket.id || 0); });
+        let devoSincronizzareFoto = false;
+        if (mioP && myPhotoBase64 && mioP.photo !== myPhotoBase64) {
+            mioP.photo = myPhotoBase64;
+            devoSincronizzareFoto = true;
+        }
+
+        Object.keys(serverData.properties).forEach(function (k) {
+          properties[k].owner = serverData.properties[k].owner;
+          properties[k].houses = serverData.properties[k].houses;
+          if (properties[k].owner !== null) {
+            let ownerP = players.find(function (pl) {
+              return pl.id === properties[k].owner;
+            });
+            if (ownerP) {
+              document.getElementById("tile-" + k).style.boxShadow =
+                "inset 0 0 10px " + ownerP.color;
+              updateHousesDisplay(k);
+            }
+          } else {
+            document.getElementById("tile-" + k).style.boxShadow = "none";
+          }
+        });
+
+        updateTokens();
+        startTurnFlow();
+
+        // Trasmette la faccia agli avversari!
+        if (devoSincronizzareFoto && gameMode === "multi" && socket) {
+            setTimeout(function() {
+                socket.emit("syncAction", { room: myRoom, players: players, properties: properties, logMsg: "📸 " + mioP.name + " ha impostato la sua foto!" });
+            }, 1000);
+        }
+      }
+      function animateDice(d1, d2, callback) {
+        let diceArea = document.getElementById("dice-result");
+        let rollCount = 0;
+        let rollAnim = setInterval(function () {
+          diceArea.innerHTML =
+            "<span class='rolling-dice'>" +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            " " +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            "</span>";
+          rollCount++;
+          if (rollCount >= 10) {
+            clearInterval(rollAnim);
+            const total = d1 + d2;
+            diceArea.innerHTML =
+              "<span style='font-size: clamp(1.5rem, 4.5vmin, 3.5rem); letter-spacing: 5px;'>" +
+              diceFaces[d1 - 1] +
+              " " +
+              diceFaces[d2 - 1] +
+              "</span> <span style='font-size: clamp(1.2rem, 3.5vmin, 2.5rem); font-weight: bold; margin-left: 10px;'>" +
+              total +
+              "</span>";
+            if (callback) callback();
+          }
+        }, 50);
+      }
+
+      function startGame(mode) {
+        renderBoard();
+        let rawName = document.getElementById("setup-name").value || (utenteLoggato ? utenteLoggato : "Ospite");
+        const pToken = document.getElementById("setup-token").value;
+        salvaProfiloSeLoggato(rawName, pToken, typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null);
+        const startMoney = parseInt(document.getElementById("setup-money").value);
+
+        const pName = typeof myPhotoBase64 !== 'undefined' && myPhotoBase64 ? rawName : (pToken + " " + rawName);
+        const availableBotTokens = ["🐘", "🍊", "🛵", "🍧", "🌋", "⚽", "🚓"].filter(t => t !== pToken);
+
+        players = [];
+        players.push({
+          id: 0,
+          name: pName, 
+          isBot: false,
+          money: startMoney,
+          position: 0,
+          color: colors[0],
+          inJail: false,
+          jailTurns: 0,
+          bankrupt: false,
+          photo: typeof myPhotoBase64 !== 'undefined' ? myPhotoBase64 : null 
+        });
+
+        if (mode === "single") {
+          const botCount = parseInt(document.getElementById("setup-bots-count").value);
+          botDifficulty = document.getElementById("setup-bots-diff").value;
+          for (let i = 1; i <= botCount; i++) {
+            let botTokenIndex = Math.floor(Math.random() * availableBotTokens.length);
+            let bToken = availableBotTokens.splice(botTokenIndex, 1)[0];
+            let bName = bToken + " " + botNames[i - 1]; 
+
+            players.push({
+              id: i,
+              name: bName,
+              isBot: true,
+              money: startMoney,
+              position: 0,
+              color: colors[i],
+              inJail: false,
+              jailTurns: 0,
+              bankrupt: false
+            });
+          }
+        }
+        
+        Object.keys(properties).forEach(function (k) {
+          properties[k].owner = null;
+          properties[k].houses = 0;
+        });
+        currentPlayerIndex = 0;
+        document.getElementById("bot-setup-menu").style.display = "none";
+        if (document.getElementById("multi-setup-menu"))
+          document.getElementById("multi-setup-menu").style.display = "none";
+        document.getElementById("main-menu").style.display = "none";
+        document.getElementById("game-ui").style.display = "flex";
+        
+        let bgMusicEl = document.getElementById("bg-music");
+        // 🔥 FIX CRASH: Ora usa volumeMusicaGlobale e la partita non si congela più!
+        if (bgMusicEl.paused && volumeMusicaGlobale > 0) playRandomBgMusic();
+
+        updateTokens();
+        startTurnFlow();
+      }
+
+      function quitGame() {
+        if (socket) socket.disconnect();
+        if (typeof myPeer !== 'undefined' && myPeer) myPeer.destroy();
+        if (typeof myAudioStream !== 'undefined' && myAudioStream) {
+            myAudioStream.getTracks().forEach(track => track.stop());
+        }
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        
+        // Questo riavvia istantaneamente la pagina, uccidendo audio e timer in background!
+        window.location.reload(); 
+      }
+
+      function getP() {
+        return players[currentPlayerIndex];
+      }
+
+      function updateTokens() {
+        for (let i = 0; i < 40; i++) {
+          let c = document.getElementById("tc-" + i);
+          if (c) c.innerHTML = "";
+        }
+        
+        const fallbackTokens = ["🐘", "🍊", "🛵", "🍧"]; 
+
+        players.forEach(function (p, index) {
+          if (!p.bankrupt) {
+            let t = document.createElement("div");
+            t.className = "player-token";
+            t.style.backgroundColor = p.color;
+            
+            if (p.photo) {
+              t.style.backgroundImage = "url('" + p.photo + "')";
+              t.style.backgroundSize = "cover";
+              t.style.backgroundPosition = "center";
+              t.innerHTML = ""; 
+            } else {
+              t.style.backgroundImage = "none";
+              t.innerHTML = p.token && p.token !== "undefined" ? p.token : fallbackTokens[index % fallbackTokens.length];
+            }
+            let dest = document.getElementById("tc-" + p.position);
+            if(dest) dest.appendChild(t);
+          }
+        });
+
+        // 🔥 FIX SALVA-CRASH: Evita di cercare i dati online se sei in Single Player!
+        let myIdSafe = gameMode === "multi" ? (socket ? socket.id : null) : 0;
+        let mioPlayer = players.find(function (p) {
+          return String(p.id) === String(myIdSafe);
+        });
+
+        if (mioPlayer && !mioPlayer.bankrupt) {
+          document.getElementById("btn-inventory").innerHTML =
+            "CARTE & SCAMBI<br><span style='color: gold; font-size: 1.1em; margin-top: 3px;'>💰 " +
+            mioPlayer.money +
+            "€</span>";
+        }
+
+        let sbHtml = "";
+        players.forEach(function(p) {
+          if(!p.bankrupt) {
+            let fotoHtml = p.photo ? "<img src='" + p.photo + "' style='width:24px; height:24px; border-radius:50%; vertical-align:middle; margin-right:5px; border:2px solid " + p.color + "; object-fit:cover;'>" : "";
+            sbHtml += "<span style='color:" + p.color + "; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);'>" + fotoHtml + p.name + ": " + p.money + "€</span>";
+          }
+        });
+        let sb = document.getElementById("scoreboard");
+        if(sb) sb.innerHTML = sbHtml;
+      } // <--- PARENTESI SALVAVITA INSERITA QUI!!!
+
+      function setRightAction(html) {
+        document.getElementById("action-buttons").innerHTML = html;
+      }
+
+      function lancioDadiProtetto() {
+        bloccaTimer();
+        rollDice();
+      }
+      function fineTurnoProtetto() {
+        bloccaTimer();
+        endTurn("Tempo scaduto / Passato.");
+      }
+      function azioneUmanaProtetta(azione) {
+        bloccaTimer();
+        humanAction(azione);
+      }
+
+      // ---- INTELLIGENZA ARTIFICIALE BOT: COSTRUZIONI & SCAMBI ----
+      function botGestisciCostruzioni(bot) {
+        if (!bot.isBot || bot.bankrupt || bot.inJail) return;
+
+        Object.keys(properties).forEach(function(pos) {
+          let prop = properties[pos];
+          if (String(prop.owner) === String(bot.id) && prop.group !== "stazione" && prop.group !== "societa") {
+            if (hasMonopoly(bot.id, prop.group) && prop.houses < 5) {
+              if (bot.money >= prop.houseCost + 150) {
+                bot.money -= prop.houseCost;
+                prop.houses++;
+                updateHousesDisplay(pos);
+                suonaEffetto('cassa');
+                document.getElementById("game-log").innerHTML = "🔨 <b>" + bot.name + "</b> costruisce su <b>" + prop.name + "</b>!";
+              }
+            }
+          }
+        });
+        updateTokens();
+      }
+
+      function botProponiScambioIA(bot) {
+        if (!bot.isBot || bot.bankrupt || bot.inJail) return false;
+
+        let gruppi = ["marrone", "celeste", "viola", "arancio", "rosso", "giallo", "verde", "blu"];
+        
+        for (let g of gruppi) {
+          let carteGruppo = Object.entries(properties).filter(e => e[1].group === g);
+          let mieCarte = carteGruppo.filter(e => String(e[1].owner) === String(bot.id));
+          
+          if (mieCarte.length === carteGruppo.length - 1) {
+            let mancaEntry = carteGruppo.find(e => String(e[1].owner) !== String(bot.id));
+            let posMancante = mancaEntry[0];
+            let propMancante = mancaEntry[1];
+
+            if (propMancante.owner !== null && String(propMancante.owner) !== String(bot.id)) {
+              let padrone = players.find(p => String(p.id) === String(propMancante.owner) && !p.bankrupt);
+              if (padrone) {
+                let offertaPrezzo = propMancante.price * 2;
+
+                if (bot.money >= offertaPrezzo + 150) {
+                  let offerta = {
+                    mySelected: [],
+                    hisSelected: [posMancante],
+                    offerMoney: offertaPrezzo,
+                    requestMoney: 0,
+                    fromId: bot.id,
+                    fromName: bot.name
+                  };
+
+                  if (!padrone.isBot) {
+                    mostraPopupRicezioneScambio({ offerta: offerta, targetId: padrone.id });
+                    return true; 
+                  } else {
+                    // Scambio automatico tra Bot!
+                    bot.money -= offertaPrezzo;
+                    padrone.money += offertaPrezzo;
+                    propMancante.owner = bot.id;
+                    updateTokens();
+                    document.getElementById("game-log").innerHTML = "🤝 <b>" + bot.name + "</b> ha comprato " + propMancante.name + " da <b>" + padrone.name + "</b> per " + offertaPrezzo + "€!";
+                    return false;
+                  }
+                }
+              }
+            }
+          }
+        }
+        return false;
+      }
+
+      function startTurnFlow() {
+        bloccaTimer();
+
+        let activePlayers = players.filter(function (pl) {
+          return !pl.bankrupt;
+        });
+
+        if (activePlayers.length === 1) {
+          let winner = activePlayers[0].name;
+          document.getElementById("game-log").innerHTML = "🏆 <b>" + winner + " HA VINTO LA PARTITA!</b> 🏆";
+          mostraVideoCentro('vittoria');
+          setRightAction("<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU E RIGIOCA</button>");
+          return;
+        } else if (activePlayers.length === 0) {
+          document.getElementById("game-log").innerHTML = "☠️ <b>TUTTI IN BANCAROTTA! NESSUN VINCITORE!</b>";
+          setRightAction("<button class='btn secondary' style='border-color: #bd2a2a; color: white; background: #bd2a2a;' onclick='quitGame()'>TORNA AL MENU</button>");
+          return;
+        }
+
+        let p = getP();
+        if (!p) return; // Protezione extra
+
+        if (p.bankrupt) {
+          currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+          setTimeout(startTurnFlow, 100);
+          return;
+        }
+
+        // 🔥 FIX SALVA-CRASH MULTIPLAYER
+        let myIdSafe = gameMode === "multi" ? (socket ? socket.id : null) : 0;
+        if (gameMode === "multi" && String(p.id) !== String(myIdSafe)) {
+          setRightAction("<button class='btn secondary' disabled>Turno di " + p.name + " (" + (hasRolledDouble ? "DOPPIO" : "ATTESA") + ")...</button>");
+          document.getElementById("game-log").innerHTML = "È il turno di <b style='color:" + p.color + "'>" + p.name + "</b>";
+          return;
+        }
+
+        if (p.isBot) {
+          botGestisciCostruzioni(p);
+          let haPropostoScambio = botProponiScambioIA(p);
+
+          setRightAction("<button class='btn secondary' disabled>Turno di " + p.name + " (" + (hasRolledDouble ? "DOPPIO" : "ATTESA") + ")...</button>");
+          
+          if (!haPropostoScambio) {
+            setTimeout(lancioDadiProtetto, 1500);
+          }
+        } else {
+          document.getElementById("game-log").innerHTML = "È il tuo turno, <b>" + p.name + "</b>!";
+            
+          if (Math.random() < 0.25) {
+            let fraseCaso = frasiCatanesi[Math.floor(Math.random() * frasiCatanesi.length)];
+            leggiTesto(fraseCaso);
+          }
+
+          if (p.inJail) {
+            setRightAction(
+              "<div style='display:flex; gap:10px; height: 100%; width: 100%;'>" +
+                "<button class='btn secondary' id='btn-jail' style='border-color: #bd2a2a; color: #bd2a2a;' onclick='payJail()'>PAGA 200€</button>" +
+                "<button class='btn' id='btn-roll-jail' onclick='lancioDadiProtetto()'>DOPPIO (10s)</button>" +
+                "</div>"
+            );
+            avviaTimer("btn-roll-jail", 10, lancioDadiProtetto);
+          } else {
+            setRightAction(
+              "<button class='btn' id='btn-roll' onclick='lancioDadiProtetto()'>LANCIA I DADI (10s)</button>"
+            );
+            avviaTimer("btn-roll", 10, lancioDadiProtetto);
+          }
+        }
+      }
+
+      function rollDice() {
+        if (isMoving) return;
+        isMoving = true;
+        let p = getP();
+        
+        suonaEffetto('dadi'); // 🎲 FA PARTIRE IL SUONO DEI DADI!
+        
+        setRightAction(
+          "<button class='btn secondary' disabled>ATTENDI...</button>"
+        );
+        document.getElementById("game-log").innerHTML =
+          "<i>Lancio in corso...</i>";
+
+        let diceArea = document.getElementById("dice-result");
+        let rollCount = 0;
+        let rollAnim = setInterval(function () {
+          diceArea.innerHTML =
+            "<span class='rolling-dice'>" +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            " " +
+            diceFaces[Math.floor(Math.random() * 6)] +
+            "</span>";
+          rollCount++;
+          if (rollCount >= 10) {
+            clearInterval(rollAnim);
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+            const total = d1 + d2;
+            diceArea.innerHTML =
+              "<span style='font-size: clamp(1.5rem, 4.5vmin, 3.5rem); letter-spacing: 5px;'>" +
+              diceFaces[d1 - 1] +
+              " " +
+              diceFaces[d2 - 1] +
+              "</span> <span style='font-size: clamp(1.2rem, 3.5vmin, 2.5rem); font-weight: bold; margin-left: 10px;'>" +
+              total +
+              "</span>";
+
+            if (gameMode === "multi" && socket)
+              socket.emit("rollDice", { room: myRoom, d1: d1, d2: d2 });
+            hasRolledDouble = d1 === d2;
+
+            if (p.inJail) {
+              if (hasRolledDouble) {
+                p.inJail = false;
+                p.jailTurns = 0;
+                document.getElementById("game-log").innerHTML =
+                  "<i>Doppio! Libero!</i>";
+                startMoving(total);
+              } else {
+                p.jailTurns++;
+                if (p.jailTurns >= 3) {
+                  p.money -= 200;
+                  p.inJail = false;
+                  p.jailTurns = 0;
+                  document.getElementById("game-log").innerHTML =
+                    "<i>Pagati 200€ forzati!</i>";
+                  hasRolledDouble = false;
+                  startMoving(total);
+                } else {
+                  isMoving = false;
+                  hasRolledDouble = false;
+                  endTurn("Niente doppio.");
+                }
+              }
+            } else {
+              startMoving(total);
+            }
+          }
+        }, 50);
+      }
+
+      // Funzione per mostrare la carta gigante al centro
+      function mostraZoomCentro(pos) {
+        let logo = document.getElementById("center-logo");
+        let zoom = document.getElementById("center-zoom");
+        if (!logo || !zoom) return;
+        
+        logo.style.opacity = "0.1"; // Sbiadisce il logo di Catanopoli
+        zoom.style.display = "flex"; // Mostra la carta
+        
+        let prop = properties[pos];
+        let nome = tileNames[pos];
+        let html = "";
+        
+        if (prop) {
+           let colorCode = "";
+           if(prop.group === "marrone") colorCode = "#8B4513";
+           if(prop.group === "celeste") colorCode = "#00BFFF";
+           if(prop.group === "viola") colorCode = "#D81B60";
+           if(prop.group === "arancio") colorCode = "#FF7F00";
+           if(prop.group === "rosso") colorCode = "#E60000";
+           if(prop.group === "giallo") colorCode = "#FFD700";
+           if(prop.group === "verde") colorCode = "#00AA00";
+           if(prop.group === "blu") colorCode = "#0055CC";
+           
+           if(colorCode) {
+             html += "<div style='width:100%; height:30%; background:" + colorCode + "; border-bottom:3px solid var(--border-color);'></div>";
+           } else if (prop.group === "stazione") {
+             html += "<div style='font-size:3rem; margin-top:10px;'>🚆</div>";
+           } else if (prop.group === "societa") {
+             html += "<div style='font-size:3rem; margin-top:10px;'>" + (prop.name.includes("Acqua") ? "💧" : "💡") + "</div>";
+           }
+           html += "<h2 style='color:var(--text-color); margin-top:10px; font-size:clamp(1rem, 2.5vmin, 1.5rem); padding: 0 5px;'>" + prop.name + "</h2>";
+           html += "<p style='color:#333; font-size:1.2rem; font-weight:bold; margin-bottom:10px;'>" + prop.price + "€</p>";
+        } else {
+           html += "<div style='display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; width:100%;'>";
+           if (pos === 2 || pos === 17 || pos === 33) html += "<div style='font-size:3rem;'>❓</div>";
+           else if (pos === 7 || pos === 22 || pos === 36) html += "<div style='font-size:3rem;'>🎲</div>";
+           else if (pos === 30) html += "<div style='font-size:3rem;'>🚓</div>";
+           else if (pos === 4) html += "<div style='font-size:3rem;'>🗑️</div>";
+           else if (pos === 38) html += "<div style='font-size:3rem;'>🥷</div>";
+           html += "<h2 style='color:var(--text-color); font-size:clamp(1rem, 2.5vmin, 1.5rem); padding:10px;'>" + nome + "</h2></div>";
+        }
+        zoom.innerHTML = html;
+      }
+
+      function nascondiZoomCentro() {
+        let logo = document.getElementById("center-logo");
+        let zoom = document.getElementById("center-zoom");
+        if(logo) logo.style.opacity = "1";
+        if(zoom) zoom.style.display = "none";
+      }
+
+      // ---- MOTORE VIDEO CENTRALE ----
+      window.mostraVideoCentro = function(nomeVideo) {
+        let logo = document.getElementById("center-logo");
+        let vid = document.getElementById("center-video");
+        if (!logo || !vid) return;
+
+        logo.style.display = "none"; 
+        vid.style.display = "block"; 
+        vid.src = nomeVideo + ".mp4"; 
+        
+        // 🔥 FIX CRASH VIDEO: Usa la nuova variabile di sistema del volume!
+        vid.muted = false;
+        let vol = volumeEffettiGlobale + 0.2;
+        vid.volume = (vol > 1) ? 1 : vol;
+        
+        let playPromise = vid.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => {
+            console.log("Video non trovato o bloccato", e);
+            vid.style.display = "none";
+            logo.style.display = "block";
+            logo.style.opacity = "1";
+          });
+        }
+
+        vid.onended = function() {
+          vid.style.display = "none";
+          logo.style.display = "block";
+          logo.style.opacity = "1";
+        };
+      };
+
+      function startMoving(total) {
+        let p = getP();
+        let stepsTaken = 0;
+        const moveInterval = setInterval(function () {
+          let oldPos = p.position;
+          p.position = (p.position + 1) % 40;
+          if (p.position < oldPos) p.money += 200;
+          updateTokens();
+          
+          mostraZoomCentro(p.position); // 🔍 MAGIA: AGGIORNA LA CARTA AL CENTRO MENTRE CAMMINA!
+          
+          stepsTaken++;
+          if (stepsTaken === total) {
+            clearInterval(moveInterval);
+            setTimeout(function () {
+              processLanding();
+            }, 300);
+          }
+        }, 300);
+      }
+
+      function processLanding() {
+        let p = getP();
+        let pos = p.position;
+        let prop = properties[pos];
+        let log = document.getElementById("game-log");
+
+        let isMyTurn =
+          gameMode === "single" || (gameMode === "multi" && p.id === socket.id);
+
+        // 🎬 TRIGGER VIDEO PER LUCE E ACQUA
+        if (pos === 12) { // Casella Bolletta Luce
+          nascondiZoomCentro();
+          mostraVideoCentro('luce'); 
+        } else if (pos === 28) { // Casella Bolletta Acqua
+          nascondiZoomCentro();
+          mostraVideoCentro('acqua');
+        }
+
+        if (prop) {
+          if (prop.owner === null) {
+            if (p.isBot) {
+              let buyChance =
+                botDifficulty === "facile"
+                  ? 0.3
+                  : botDifficulty === "medio"
+                  ? 0.6
+                  : 1.0;
+                  if (p.money >= prop.price && Math.random() <= buyChance) {
+                p.money -= prop.price;
+                prop.owner = p.id;
+                document.getElementById("tile-" + pos).style.boxShadow =
+                  "inset 0 0 10px " + p.color;
+                  
+                suonaEffetto('cassa'); // 💰 SUONO CASSA BOT
+                
+                endTurn(p.name + " compra <b>" + prop.name + "</b>.");
+              } else endTurn(p.name + " passa.");
+            } else if (isMyTurn) {
+              log.innerHTML =
+                "Sei su <b>" + prop.name + "</b><br>Costa " + prop.price + "€.";
+              setRightAction(
+                "<div style='display:flex; gap:10px; height: 100%; width: 100%;'>" +
+                  "<button class='btn secondary' id='btn-pass' onclick='fineTurnoProtetto()'>PASSA (10s)</button>" +
+                  "<button class='btn' style='background: #3b7a3b; color: white; border-color: #2a5a2a;' onclick=\"azioneUmanaProtetta('buy')\">COMPRA<br>" +
+                  prop.price +
+                  "€</button>" +
+                  "</div>"
+              );
+              avviaTimer("btn-pass", 10, fineTurnoProtetto);
+            } else {
+              setRightAction(
+                "<button class='btn secondary' disabled>Turno di " +
+                  p.name +
+                  "...</button>"
+              );
+              log.innerHTML = p.name + " sta decidendo su " + prop.name + "...";
+            }
+          } else if (prop.owner === p.id) {
+            // IA BOT: IL BOT COSTRUISCE SE HA IL MONOPOLIO E SOLDI A SUFFICIENZA!
+            if (p.isBot) {
+              if (hasMonopoly(p.id, prop.group) && prop.houses < 5 && prop.group !== "stazione" && prop.group !== "societa" && p.money > prop.houseCost + 150) {
+                p.money -= prop.houseCost;
+                prop.houses++;
+                updateHousesDisplay(pos);
+                suonaEffetto('cassa');
+                endTurn("🔨 " + p.name + " COSTRUISCE su " + prop.name + "!");
+              } else {
+                endTurn(p.name + " riposa sulla sua proprietà.");
+              }
+            } else if (
+              isMyTurn &&
+              !p.isBot &&
+              hasMonopoly(p.id, prop.group) &&
+              prop.houses < 5 &&
+              prop.group !== "stazione" &&
+              prop.group !== "societa"
+            ) {
+              log.innerHTML = "Tua proprietà: <b>" + prop.name + "</b>";
+              setRightAction(
+                "<div style='display:flex; gap:10px; height: 100%; width: 100%;'>" +
+                  "<button class='btn secondary' id='btn-pass' onclick='fineTurnoProtetto()'>PASSA (10s)</button>" +
+                  "<button class='btn' style='background: #c99c51;' onclick=\"azioneUmanaProtetta('build')\">COSTRUISCI<br>" +
+                  prop.houseCost +
+                  "€</button>" +
+                  "</div>"
+              );
+              avviaTimer("btn-pass", 10, fineTurnoProtetto);
+            } else if (isMyTurn) {
+              endTurn("Sei sulla tua proprietà.");
+            }
+          } else {
+            let rent = calculateRent(pos);
+            let owner = players.find(function (pl) {
+              return pl.id === prop.owner;
+            });
+            if (p.isBot) {
+              p.money -= rent;
+              if (owner) owner.money += rent;
+              endTurn(p.name + " paga " + rent + "€ a " + owner.name + ".");
+            } else if (isMyTurn) {
+              currentDebt = rent;
+              log.innerHTML =
+                "Proprietà di " + owner.name + ". Paga <b>" + rent + "€</b>.";
+              setRightAction(
+                "<button class='btn' id='btn-pay' style='background: #bd2a2a; color: white;' onclick=\"azioneUmanaProtetta('pay')\">PAGA E PASSA (" +
+                  rent +
+                  "€) (10s)</button>"
+              );
+              avviaTimer("btn-pay", 10, function () {
+                azioneUmanaProtetta("pay");
+              });
+            }
+          }
+        } else {
+            if (pos === 4) {
+              nascondiZoomCentro(); // Spegne la carta gigante del movimento
+              mostraVideoCentro('spazzatura'); // 🎬 VIDEO SPAZZATURA!
+              
+              if (p.isBot) {
+                p.money -= 50;
+                endTurn(p.name + " paga la spazzatura.");
+              } else if (isMyTurn) {
+                currentDebt = 50;
+                log.innerHTML = "Paga la spazzatura.";
+                setRightAction(
+                  "<button class='btn' id='btn-pay' style='background: #bd2a2a; color: white;' onclick=\"azioneUmanaProtetta('pay')\">PAGA 50€ (10s)</button>"
+                );
+                avviaTimer("btn-pay", 10, function () {
+                  azioneUmanaProtetta("pay");
+                });
+              }
+            } else if (pos === 38) {
+              nascondiZoomCentro(); // Spegne la carta gigante del movimento
+              mostraVideoCentro('rapina'); // 🎬 VIDEO RAPINA!
+              
+              if (p.isBot) {
+                p.money -= 100;
+                endTurn(p.name + " è stato rapinato.");
+              } else if (isMyTurn) {
+                currentDebt = 100;
+                log.innerHTML = "Rapina!";
+                setRightAction(
+                  "<button class='btn' id='btn-pay' style='background: #bd2a2a; color: white;' onclick=\"azioneUmanaProtetta('pay')\">PAGA 100€ (10s)</button>"
+                );
+                avviaTimer("btn-pay", 10, function () {
+                  azioneUmanaProtetta("pay");
+                });
+              }
+            } else if (pos === 30) {
+            if (isMyTurn || p.isBot) {
+              p.position = 10;
+              p.inJail = true;
+              p.jailTurns = 0;
+              hasRolledDouble = false;
+              updateTokens();
+              
+              suonaEffetto('sirena'); // 🚓 SUONO
+              mostraVideoCentro('prigione'); // 🎬 VIDEO PRIGIONE
+              
+              endTurn(p.name + " va in Prigione!");
+            }
+          } else if (pos === 7 || pos === 22 || pos === 36) {
+            if (p.isBot) {
+              let c =
+                mazzoSperiamoBene[
+                  Math.floor(Math.random() * mazzoSperiamoBene.length)
+                ];
+              c.action(p);
+              endTurn(p.name + " pesca Speriamo Bene: " + c.text);
+            } else if (isMyTurn) {
+              pescaCarta(mazzoSperiamoBene, "Speriamo Bene");
+            }
+          } else if (pos === 2 || pos === 17 || pos === 33) {
+            if (p.isBot) {
+              let c =
+                mazzoVediamoCheSuccede[
+                  Math.floor(Math.random() * mazzoVediamoCheSuccede.length)
+                ];
+              c.action(p);
+              if (!p.inJail) endTurn(p.name + " pesca: " + c.text);
+              else {
+                hasRolledDouble = false;
+                endTurn(p.name + " è andato in prigione!");
+              }
+            } else if (isMyTurn) {
+              pescaCarta(mazzoVediamoCheSuccede, "Vediamo che succede");
+            }
+          } else {
+            if (isMyTurn || p.isBot)
+              endTurn(p.name + " si ferma su " + tileNames[pos] + ".");
+          }
+        }
+      }
+
+      window.mostraInfoTerreno = function (pos) {
+        let prop = properties[pos];
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+
+        if (prop) {
+          let ownerName = "Banca (Libero)";
+          let ownerColor = "#aaa";
+          if (prop.owner !== null) {
+            let p = players.find(function (pl) { return String(pl.id) === String(prop.owner); });
+            if (p) { ownerName = p.name; ownerColor = p.color; }
+          }
+
+          let infoHtml = "<h3 style='color: " + (prop.group === 'stazione' || prop.group === 'societa' ? '#fff' : 'var(--border-color)') + ";'>" + prop.name + "</h3>";
+          infoHtml += "<p style='margin-bottom:10px;'><b>Proprietario:</b> <span style='color:" + ownerColor + "'>" + ownerName + "</span></p>";
+          infoHtml += "<p><b>Costo Acquisto:</b> " + prop.price + "€</p>";
+          
+          if (prop.group !== 'stazione' && prop.group !== 'societa') {
+              infoHtml += "<div style='background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; margin-top:10px; text-align:left; font-size:0.9rem;'>";
+              infoHtml += "<p>Affitto base: " + prop.rent + "€</p>";
+              infoHtml += "<p>Con 1 Casa: " + (prop.rent * 5) + "€</p>";
+              infoHtml += "<p>Con 2 Case: " + (prop.rent * 15) + "€</p>";
+              infoHtml += "<p>Con 3 Case: " + (prop.rent * 40) + "€</p>";
+              infoHtml += "<p>Con 4 Case: " + (prop.rent * 50) + "€</p>";
+              infoHtml += "<p style='color:#ff4444; font-weight:bold;'>Con Albergo: " + (prop.rent * 60) + "€</p>";
+              infoHtml += "<hr style='border:1px solid #444; margin: 8px 0;'>";
+              infoHtml += "<p>Costo per Casa: " + prop.houseCost + "€</p>";
+              infoHtml += "</div>";
+          } else if (prop.group === 'stazione') {
+              infoHtml += "<div style='background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; margin-top:10px; text-align:left; font-size:0.9rem;'>";
+              infoHtml += "<p>Affitto con 1 Stazione: 25€</p>";
+              infoHtml += "<p>Affitto con 2 Stazioni: 50€</p>";
+              infoHtml += "<p>Affitto con 3 Stazioni: 100€</p>";
+              infoHtml += "<p style='color:#ff4444; font-weight:bold;'>Affitto con 4 Stazioni: 200€</p>";
+              infoHtml += "</div>";
+          } else if (prop.group === 'societa') {
+              infoHtml += "<div style='background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; margin-top:10px; text-align:left; font-size:0.9rem;'>";
+              infoHtml += "<p>Affitto con 1 Società: 20€</p>";
+              infoHtml += "<p style='color:#ff4444; font-weight:bold;'>Affitto con 2 Società: 50€</p>";
+              infoHtml += "</div>";
+          }
+
+          content.innerHTML = infoHtml + "<button class='btn secondary' style='margin-top:15px; width:100%;' onclick='closeModal()'>CHIUDI</button>";
+        } else {
+          let name = tileNames[pos];
+          content.innerHTML = "<h3 style='color:white;'>" + name + "</h3><p>Casella speciale del tabellone.</p><button class='btn secondary' style='margin-top:15px; width:100%;' onclick='closeModal()'>CHIUDI</button>";
+        }
+        modal.style.display = "flex";
+      };
+
+      function pescaCarta(mazzo, titolo) {
+        const carta = mazzo[Math.floor(Math.random() * mazzo.length)];
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+        content.innerHTML =
+          "<h3>" + titolo + "</h3>" +
+          "<p style='font-size: 1.1rem; margin-bottom: 20px;'>" + carta.text + "</p>" +
+          "<button class='btn' id='btn-modal-ok' style='width: 100%;' onclick=\"eseguiCartaEChiudi(" +
+          mazzo.indexOf(carta) + ", '" + (titolo === "Speriamo Bene" ? "SB" : "VCS") + "')\">OK, CONTINUA (10s)</button>";
+        modal.style.display = "flex";
+        
+        // IL NOSTRO PIPER LEGGE LA CARTA!
+        leggiTesto(titolo + ". " + carta.text);
+
+        avviaTimer("btn-modal-ok", 10, function () {
+          eseguiCartaEChiudi(
+            mazzo.indexOf(carta),
+            titolo === "Speriamo Bene" ? "SB" : "VCS"
+          );
+        });
+      }
+
+      window.eseguiCartaEChiudi = function (index, tipo) {
+        bloccaTimer();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel(); // Blocca la voce se premi OK!
+        
+        const carta = tipo === "SB" ? mazzoSperiamoBene[index] : mazzoVediamoCheSuccede[index];
+        let p = getP();
+        carta.action(p);
+        updateTokens();
+        closeModal();
+        if (!p.inJail) {
+          endTurn("Hai pescato: " + carta.text);
+        } else {
+          hasRolledDouble = false;
+          endTurn("Sei andato in prigione!");
+        }
+      };
+
+      function humanAction(action) {
+        let p = getP();
+        let prop = properties[p.position];
+        if (action === "buy") {
+          if (p.money >= prop.price) {
+            p.money -= prop.price;
+            prop.owner = p.id;
+            document.getElementById("tile-" + p.position).style.boxShadow =
+              "inset 0 0 10px " + p.color;
+              
+            suonaEffetto('cassa'); // 💰 CASSA ACQUISTO TERRENO
+            endTurn("Hai comprato " + prop.name + "!");
+          } else alert("Fondi insufficienti.");
+        } else if (action === "build") {
+          if (p.money >= prop.houseCost) {
+            p.money -= prop.houseCost;
+            prop.houses++;
+            updateHousesDisplay(p.position);
+            
+            suonaEffetto('cassa'); // 💰 CASSA COSTRUZIONE CASA/ALBERGO
+            endTurn("Hai costruito su " + prop.name + "!");
+          } else alert("Fondi insufficienti.");
+        } else if (action === "pay") {
+          p.money -= currentDebt;
+          if (prop && prop.owner !== null) {
+            let owner = players.find(function (pl) {
+              return pl.id === prop.owner;
+            });
+            if (owner) owner.money += currentDebt;
+          }
+          currentDebt = 0;
+          updateTokens();
+          
+          suonaEffetto('cassa'); // 💰 CASSA PAGAMENTO AFFITTO/TASSE
+          endTurn("Pagamento effettuato.");
+        }
+      }
+
+      function endTurn(msg) {
+        bloccaTimer();
+        isMoving = false;
+        let p = getP();
+        
+        nascondiZoomCentro(); // ❌ SPEGNE LA CARTA GIGANTE E RIMETTE IL LOGO
+
+        if (p.money < 0 && !p.bankrupt) {
+          p.bankrupt = true;
+          hasRolledDouble = false;
+          
+          suonaEffetto('sconfitta'); // ☠️ SUONO
+          mostraVideoCentro('bancarotta'); // 🎬 VIDEO BANCAROTTA
+          
+          msg = "☠️ <b>" + p.name + " È IN BANCAROTTA!</b> Fuori dai giochi!";
+          Object.keys(properties).forEach(function (k) {
+            if (String(properties[k].owner) === String(p.id)) {
+              properties[k].owner = null;
+              properties[k].houses = 0;
+              document.getElementById("tile-" + k).style.boxShadow = "none";
+              let badge = document
+                .getElementById("tile-" + k)
+                .querySelector(".property-badge");
+              if (badge) badge.remove();
+            }
+          });
+          updateTokens();
+        }
+
+        document.getElementById("game-log").innerHTML = msg;
+        setRightAction(
+          "<button class='btn secondary' disabled>Passaggio turno...</button>"
+        );
+
+        if (gameMode === "multi" && socket) {
+          socket.emit("syncAction", {
+            room: myRoom,
+            players: players,
+            properties: properties,
+            logMsg: msg,
+          });
+          if (p.id === socket.id) {
+            setTimeout(function () {
+              // 🔥 FIX MULTIPLAYER: SE FAI DOPPIO, TIRI DI NUOVO INVECE DI PASSARE IL TURNO
+              if (hasRolledDouble && !p.bankrupt && !p.inJail) {
+                hasRolledDouble = false;
+                startTurnFlow(); 
+              } else {
+                hasRolledDouble = false;
+                socket.emit("endTurn", { room: myRoom }); 
+              }
+            }, 2000);
+          }
+        } else {
+          setTimeout(function () {
+            if (hasRolledDouble && !p.bankrupt && !p.inJail) {
+              hasRolledDouble = false;
+              startTurnFlow();
+            } else {
+              hasRolledDouble = false;
+              currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+              startTurnFlow();
+            }
+          }, 2500);
+        }
+      }
+
+      function payJail() {
+        let p = getP();
+        if (p.money >= 200) {
+          p.money -= 200;
+          p.inJail = false;
+          p.jailTurns = 0;
+          updateTokens();
+          startTurnFlow();
+        } else alert("Non hai 200€!");
+      }
+
+      function hasMonopoly(owner, group) {
+        let g = Object.values(properties).filter(function (p) {
+          return p.group === group;
+        });
+        return (
+          g.length > 0 &&
+          g.every(function (p) {
+            return String(p.owner) === String(owner);
+          })
+        );
+      }
+      function calculateRent(pos) {
+        let prop = properties[pos];
+        let owner = prop.owner;
+
+        // Conta quante carte di questo specifico gruppo possiede il giocatore
+        let countOwned = Object.values(properties).filter(function (p) {
+          return p.group === prop.group && p.owner === owner;
+        }).length;
+
+        // Regola speciale per le Stazioni: 25 -> 50 -> 100 -> 200
+        if (prop.group === "stazione") {
+          if (countOwned === 1) return 25;
+          if (countOwned === 2) return 50;
+          if (countOwned === 3) return 100;
+          if (countOwned === 4) return 200;
+        }
+
+        // Regola speciale per le Società (Luce / Acqua)
+        if (prop.group === "societa") {
+          if (countOwned === 1) return 20;
+          if (countOwned === 2) return 50; // Il prezzo sale se le hai entrambe
+        }
+
+        // Regole per i Terreni normali (Case e Alberghi)
+        let base = prop.rent;
+        if (prop.houses === 0)
+          return hasMonopoly(owner, prop.group) ? base * 2 : base;
+          
+        return (
+          base *
+          (prop.houses === 1
+            ? 5
+            : prop.houses === 2
+            ? 15
+            : prop.houses === 3
+            ? 40
+            : prop.houses === 4
+            ? 50
+            : 60)
+        );
+      }
+
+      function updateHousesDisplay(pos) {
+        let prop = properties[pos];
+        let tile = document.getElementById("tile-" + pos);
+        let badge = tile.querySelector(".property-badge");
+        if (!badge) {
+          badge = document.createElement("div");
+          badge.className = "property-badge";
+          tile.appendChild(badge);
+        }
+        badge.innerText = prop.houses === 5 ? "🏨" : "🏠".repeat(prop.houses);
+        badge.style.color = prop.houses === 5 ? "#ff4444" : "#44ff44";
+      }
+
+      function getMiniCardHtml(k, p, prefix) {
+        let headerClass =
+          p.group !== "stazione" && p.group !== "societa" ? "c-" + p.group : "";
+        let headerStyle = headerClass
+          ? "height: 15px; border-bottom: 2px solid var(--border-color);"
+          : "height: 15px;";
+        return (
+          "<label class='mini-card-wrapper'>" +
+          "<input type='checkbox' id='" +
+          prefix +
+          "-" +
+          k +
+          "' value='" +
+          k +
+          "'>" +
+          "<div class='mini-card'><div class='" +
+          headerClass +
+          "' style='" +
+          headerStyle +
+          " width: 100%;'></div>" +
+          "<div style='padding: 2px; text-align: center; display: flex; flex-direction: column; justify-content: space-between; height: 100%;'>" +
+          "<b>" +
+          p.name +
+          "</b><span style='font-size: 0.5rem; color: #aaa;'>" +
+          p.price +
+          "€</span></div></div></label>"
+        );
+      }
+
+      function openInventoryAndTrade() {
+        let pAttuale = getP();
+        let isMyTurn = (gameMode === "single" && !pAttuale.isBot) || (gameMode === "multi" && pAttuale.id === socket.id);
+        
+        // 1. BLOCCO TURNO
+        if (!isMyTurn) {
+            alert("Puoi aprire il menu Scambi e Costruzioni SOLO durante il tuo turno!");
+            return;
+        }
+
+        // 2. PAUSA AL TIMER PRINCIPALE
+        clearInterval(mainTimer);
+
+        const mioP = players.find(function (pl) {
+          return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+        });
+        if (!mioP || mioP.bankrupt) return;
+        const pId = mioP.id;
+
+        const mieCarte = Object.entries(properties).filter(function (entry) {
+          return String(entry[1].owner) === String(pId);
+        });
+        let mieHtml = mieCarte.length > 0 ? mieCarte.map(function (entry) {
+                  return getMiniCardHtml(entry[0], entry[1], "mycard");
+                }).join("") : "<i style='margin:auto;'>Nessuna carta.</i>";
+
+        let avversariAttivi = players.filter(function (pl) {
+          return String(pl.id) !== String(pId) && !pl.bankrupt;
+        });
+        let botSelectHtml = avversariAttivi.map(function (pl) {
+            return "<option value='" + pl.id + "'>" + pl.name + " (" + pl.money + "€)</option>";
+          }).join("");
+
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+        content.innerHTML =
+          "<h3 style='display:flex; justify-content:space-between; align-items:center;'>Gestione <span id='modal-timer-display' style='color:#bd2a2a; font-size:1.2rem; font-weight:bold;'>40s</span></h3>" +
+          "<p style='font-size:0.85rem; margin-bottom:5px;'>Scegli l'avversario:</p>" +
+          "<select class='trade-select' id='trade-target' onchange='renderBotCards()'>" +
+          botSelectHtml +
+          "</select>" +
+          "<div style='display:flex; gap:10px; margin-bottom: 10px; flex-direction: column; @media(min-width: 400px){flex-direction:row;}'>" +
+          "<div style='flex:1;'><h4 style='color:#44ff44; font-size:0.9rem; margin-bottom: 5px;'>LE TUE CARTE</h4><div class='trade-list'>" +
+          mieHtml +
+          "</div>" +
+          "<div style='margin: 5px 0; font-size: 0.9rem;'><label style='color: #44ff44; font-weight: bold;'>Offri contanti: </label>" +
+          "<input type='number' id='trade-offer-money' value='0' style='width: 80px; padding: 5px; border-radius: 4px; border: none; font-weight: bold; text-align:center;'> €</div></div>" +
+          "<div style='flex:1;'><h4 style='color:#ff4444; font-size:0.9rem; margin-bottom: 5px;'>CARTE SUE</h4><div class='trade-list' id='bot-cards-list'></div>" +
+          "<div style='margin: 5px 0; font-size: 0.9rem;'><label style='color: gold; font-weight: bold;'>Richiedi contanti: </label>" +
+          "<input type='number' id='trade-request-money' value='0' style='width: 80px; padding: 5px; border-radius: 4px; border: none; font-weight: bold; text-align:center;'> €</div></div></div>" +
+          "<div style='display:flex; gap:10px; margin-bottom: 10px;'>" +
+          "<button class='btn' style='flex:1; font-size:0.75rem;' onclick='proposeTrade()'>🤝 PROPONI SCAMBIO</button>" +
+          "<div style='flex:1; display:flex; flex-direction:column; gap:5px;'>" +
+            "<select id='build-qty' style='padding:8px; border-radius:4px; font-weight:bold;'>" +
+              "<option value='1'>+ 1 Casa</option>" +
+              "<option value='2'>+ 2 Case</option>" +
+              "<option value='3'>+ 3 Case</option>" +
+              "<option value='4'>+ 4 Case</option>" +
+              "<option value='5'>🏨 Albergo Istantaneo (da zero)</option>" +
+            "</select>" +
+            "<button class='btn' style='background:#c99c51; font-size:0.75rem;' onclick='buildFromInventory()'>🔨 COSTRUISCI (Seleziona)</button>" +
+          "</div>" +
+          "</div>" +
+          "<button class='btn secondary' style='width: 100%;' onclick='closeModal()'>CHIUDI E TORNA AL GIOCO</button>";
+
+        modal.style.display = "flex";
+        if (avversariAttivi.length > 0) renderBotCards();
+
+        // 3. AVVIA IL TIMER DI 40 SECONDI
+        let modalSec = 40;
+        clearInterval(tradeTimer);
+        tradeTimer = setInterval(function() {
+            modalSec--;
+            let disp = document.getElementById("modal-timer-display");
+            if(disp) disp.innerText = modalSec + "s";
+            if(modalSec <= 0) {
+                clearInterval(tradeTimer);
+                closeModal(); // Chiude brutalmente se perdi tempo!
+            }
+        }, 1000);
+        }
+
+      window.renderBotCards = function () {
+        const targetId = document.getElementById("trade-target").value;
+        const sueCarte = Object.entries(properties).filter(function (entry) {
+          return String(entry[1].owner) === String(targetId);
+        });
+        document.getElementById("bot-cards-list").innerHTML =
+          sueCarte.length > 0
+            ? sueCarte
+                .map(function (entry) {
+                  return getMiniCardHtml(entry[0], entry[1], "botcard");
+                })
+                .join("")
+            : "<i style='margin:auto;'>Nessuna carta.</i>";
+      };
+
+      window.proposeTrade = function () {
+        const targetId = document.getElementById("trade-target").value;
+        const targetName = players.find(function (p) {
+          return String(p.id) === String(targetId);
+        }).name;
+
+        let mySelected = Array.from(
+          document.querySelectorAll('input[id^="mycard-"]:checked')
+        ).map(function (cb) {
+          return cb.value;
+        });
+        let hisSelected = Array.from(
+          document.querySelectorAll('input[id^="botcard-"]:checked')
+        ).map(function (cb) {
+          return cb.value;
+        });
+        let offerMoney =
+          parseInt(document.getElementById("trade-offer-money").value) || 0;
+        let requestMoney =
+          parseInt(document.getElementById("trade-request-money").value) || 0;
+
+        if (
+          mySelected.length === 0 &&
+          hisSelected.length === 0 &&
+          offerMoney === 0 &&
+          requestMoney === 0
+        ) {
+          alert("Inserisci una richiesta o un'offerta valida!");
+          return;
+        }
+
+        let botPlayer = players.find(function (p) {
+          return String(p.id) === String(targetId);
+        });
+        let mioP = players.find(function (pl) {
+          return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+        });
+
+        if (mioP.money < offerMoney) {
+          alert("Non hai abbastanza soldi da offrire!");
+          return;
+        }
+        if (botPlayer.money < requestMoney) {
+          alert(targetName + " non ha abbastanza soldi in contanti!");
+          return;
+        }
+
+        let offerta = {
+          mySelected: mySelected,
+          hisSelected: hisSelected,
+          offerMoney: offerMoney,
+          requestMoney: requestMoney,
+          fromId: mioP.id,
+          fromName: mioP.name,
+        };
+
+        if (botPlayer.isBot) {
+          let myValue =
+            mySelected.reduce(function (sum, k) {
+              return sum + properties[k].price;
+            }, 0) + offerMoney;
+          let hisValue =
+            hisSelected.reduce(function (sum, k) {
+              return sum + properties[k].price;
+            }, 0) + requestMoney;
+
+          if (myValue >= hisValue * 0.7) {
+            botPlayer.money -= requestMoney;
+            botPlayer.money += offerMoney;
+            mioP.money += requestMoney;
+            mioP.money -= offerMoney;
+            mySelected.forEach(function (k) {
+              properties[k].owner = targetId;
+            });
+            hisSelected.forEach(function (k) {
+              properties[k].owner = mioP.id;
+              document.getElementById("tile-" + k).style.boxShadow =
+                "inset 0 0 10px " + mioP.color;
+            });
+            updateTokens();
+            alert(targetName + " accetta! Scambio effettuato.");
+          } else {
+            alert(
+              targetName + " rifiuta. L'offerta non è conveniente per lui!"
+            );
+          }
+          closeModal();
+        } else {
+          if (socket) {
+            socket.emit("sendTradeOffer", {
+              room: myRoom,
+              targetId: targetId,
+              offerta: offerta,
+            });
+            closeModal();
+            alert(
+              "Proposta inviata a " + targetName + ". In attesa di risposta..."
+            );
+          }
+        }
+      };
+
+      window.mostraPopupRicezioneScambio = function (data) {
+        bloccaTimer();
+        window.tempTradeData = data;
+        let testoMieCarte =
+          data.offerta.hisSelected
+            .map(function (k) {
+              return properties[k].name;
+            })
+            .join(", ") || "Nessuna";
+        let testoSueCarte =
+          data.offerta.mySelected
+            .map(function (k) {
+              return properties[k].name;
+            })
+            .join(", ") || "Nessuna";
+
+        let testoOfferta =
+          data.offerta.offerMoney > 0
+            ? " <b>(+ " + data.offerta.offerMoney + "€ in regalo)</b>"
+            : "";
+        let testoRichiesta =
+          data.offerta.requestMoney > 0
+            ? " <b>(+ " + data.offerta.requestMoney + "€ dai tuoi fondi)</b>"
+            : "";
+
+        const modal = document.getElementById("modal-overlay");
+        const content = document.getElementById("modal-content");
+        content.innerHTML =
+          "<h3 style='color:#c99c51'>Scambio da " +
+          data.offerta.fromName +
+          "</h3>" +
+          "<p style='margin-bottom:10px; font-size:0.9rem;'><b>Ti offre:</b> " +
+          testoSueCarte +
+          testoOfferta +
+          "</p>" +
+          "<p style='margin-bottom:10px; font-size:0.9rem;'><b>Vuole in cambio:</b> " +
+          testoMieCarte +
+          testoRichiesta +
+          "</p>" +
+          "<div style='display:flex; gap:10px; margin-top:20px;'>" +
+          "<button class='btn' style='background:#3b7a3b' onclick='rispondiScambio(true)'>ACCETTA</button>" +
+          "<button class='btn secondary' style='color:#bd2a2a; border-color:#bd2a2a' onclick='rispondiScambio(false)'>RIFIUTA</button>" +
+          "</div>";
+        modal.style.display = "flex";
+      };
+
+      window.rispondiScambio = function (accepted) {
+        closeModal();
+        let data = window.tempTradeData;
+        
+        // CONTROLLO: SE SIAMO ONLINE...
+        if (gameMode === "multi" && socket) {
+            let targetName = players.find(function (p) {
+              return String(p.id) === String(socket.id);
+            }).name;
+            socket.emit("tradeAnswer", {
+              room: myRoom,
+              targetId: socket.id,
+              targetName: targetName,
+              offerta: data.offerta,
+              accepted: accepted,
+            });
+        } else {
+            // 🔥 FIX SINGLE PLAYER: GESTISCE LO SCAMBIO IN LOCALE SENZA CRASHARE!
+            let pRicevente = players.find(p => String(p.id) === String(0)); // Tu sei sempre l'id 0
+            let pOfferente = players.find(p => String(p.id) === String(data.offerta.fromId)); // Il Bot che ti ha fatto l'offerta
+            
+            if (accepted) {
+                pRicevente.money -= data.offerta.requestMoney;
+                pRicevente.money += data.offerta.offerMoney;
+                pOfferente.money += data.offerta.requestMoney;
+                pOfferente.money -= data.offerta.offerMoney;
+
+                data.offerta.mySelected.forEach(k => properties[k].owner = pRicevente.id);
+                data.offerta.hisSelected.forEach(k => {
+                    properties[k].owner = pOfferente.id;
+                    document.getElementById("tile-" + k).style.boxShadow = "inset 0 0 10px " + pOfferente.color;
+                });
+
+                updateTokens();
+                suonaEffetto('cassa');
+                document.getElementById("game-log").innerHTML = "🤝 Hai ACCETTATO lo scambio di " + pOfferente.name + "!";
+            } else {
+                document.getElementById("game-log").innerHTML = "❌ Hai RIFIUTATO lo scambio di " + pOfferente.name + ".";
+            }
+            
+            // Il bot era in attesa della tua risposta: ora riprende il turno e lancia i dadi!
+            setTimeout(lancioDadiProtetto, 1500);
+        }
+      };
+
+      window.buildFromInventory = function() {
+        const mioP = players.find(function(pl) { return String(pl.id) === String(gameMode === "multi" ? socket.id : 0); });
+        let mySelected = Array.from(document.querySelectorAll('input[id^="mycard-"]:checked')).map(function (cb) { return cb.value; });
+
+        if (mySelected.length !== 1) {
+          alert("Devi selezionare ESATTAMENTE UNA delle tue carte per poterci costruire sopra!");
+          return;
+        }
+
+        let pos = mySelected[0];
+        let prop = properties[pos];
+        let qty = parseInt(document.getElementById("build-qty").value);
+
+        if (prop.group === "stazione" || prop.group === "societa") {
+          alert("Non puoi costruire su Stazioni o Società!");
+          return;
+        }
+        if (!hasMonopoly(mioP.id, prop.group)) {
+          alert("Devi possedere TUTTI i terreni di questo colore per poter costruire!");
+          return;
+        }
+        
+        // Verifica se supera il limite di 5 case (Albergo)
+        if (prop.houses + qty > 5) {
+          alert("Puoi avere massimo un Albergo (5) su questo terreno! Ne hai già " + prop.houses);
+          return;
+        }
+
+        let totalCost = prop.houseCost * qty;
+
+        if (mioP.money < totalCost) {
+          alert("Non hai abbastanza soldi! Costano " + totalCost + "€ in totale.");
+          return;
+        }
+
+        mioP.money -= totalCost;
+        prop.houses += qty;
+        updateHousesDisplay(pos);
+        updateTokens();
+        
+        suonaEffetto('cassa'); // Suona la cassa
+
+        if (gameMode === "multi" && socket) {
+          socket.emit("syncAction", {
+            room: myRoom,
+            players: players,
+            properties: properties,
+            logMsg: mioP.name + " ha costruito " + qty + " casa/e su " + prop.name + "!"
+          });
+        }
+        
+        alert("Hai costruito con successo su " + prop.name + " spendendo " + totalCost + "€!");
+        closeModal(); 
+      };
+
+      function closeModal() {
+        document.getElementById("modal-overlay").style.display = "none";
+        clearInterval(tradeTimer); // Ferma il timer del menu
+        
+        let p = getP();
+        let isMyTurn = (gameMode === "single" && !p.isBot) || (gameMode === "multi" && p.id === socket.id);
+        // Se era il tuo turno, toglie la pausa al timer principale!
+        if (isMyTurn && currentTimerSec > 0 && currentTimerBtn) {
+            avviaTimer(currentTimerBtn, currentTimerSec, currentTimerCallback);
+        }
+      }
+
+      let myPeer = null;
+      let myAudioStream = null;
+
+      // 🔥 CONFIGURAZIONE PULITA: Solo server essenziali, niente bombardamenti che fanno bannare l'IP
+      const peerConfig = {
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+          ]
+        }
+      };
+
+      // Genera un Flusso Audio Vuoto per l'ascolto passivo
+      window.fakeStream = null;
+      try { window.fakeStream = new (window.AudioContext || window.webkitAudioContext)().createMediaStreamDestination().stream; } catch(e){}
+
+      window.inizializzaPeerPassivo = function() {
+          if (myPeer) return; 
+          myPeer = new Peer(peerConfig); 
+          
+          myPeer.on("call", function (call) {
+              call.answer(window.fakeStream); 
+              call.on("stream", function (userAudioStream) {
+                aggiungiMediaPlayer(call.peer, userAudioStream, call);
+              });
+              call.on("close", function() { distruggiVideo(call.peer); });
+              call.on("error", function() { distruggiVideo(call.peer); });
+          });
+
+          myPeer.on("open", function (id) {
+              if (socket) socket.emit("voiceReady", { room: myRoom, peerId: id });
+          });
+      };
+
+      window.accendiMedia = function(conVideo = false) {
+        if (myPeer) { 
+          for (let conns in myPeer.connections) {
+            myPeer.connections[conns].forEach(c => c.close());
+          }
+          myPeer.destroy(); 
+          myPeer = null; 
+        }
+        if (myAudioStream) { myAudioStream.getTracks().forEach(t => t.stop()); myAudioStream = null; }
+
+        // 🔥 NESSUNA FORZATURA STRANA: Lasciamo che lo Xiaomi e la rete scelgano il formato migliore
+        let mediaConstraints = conVideo 
+          ? { video: { facingMode: "user" }, audio: true } 
+          : { audio: true, video: false };
+
+        navigator.mediaDevices.getUserMedia(mediaConstraints)
+          .then(function (stream) {
+            myAudioStream = stream;
+
+            let btnAudio = document.getElementById("btn-afk-audio");
+            let btnVideo = document.getElementById("btn-afk-video");
+            let btnMic = document.getElementById("btn-voice"); 
+            
+            if(conVideo) {
+               if(btnVideo) { btnVideo.style.background = "#bd2a2a"; btnVideo.innerHTML = "📹 SEI IN VIDEO"; }
+               if(btnAudio) { btnAudio.style.background = "#2c4a8a"; btnAudio.innerHTML = "🎙️ PASSA AD AUDIO"; }
+            } else {
+               if(btnAudio) { btnAudio.style.background = "#bd2a2a"; btnAudio.innerHTML = "🎙️ SEI IN AUDIO"; }
+               if(btnVideo) { btnVideo.style.background = "#3b7a3b"; btnVideo.innerHTML = "📹 PASSA A VIDEO"; }
+            }
+            if(btnMic) { btnMic.style.background = "#3b7a3b"; btnMic.style.borderColor = "#2a5a2a"; btnMic.innerHTML = "🎤 AUDIO ON"; }
+
+            if (document.getElementById("my-video-wrapper")) {
+                if(conVideo) {
+                    document.getElementById("my-video-wrapper").style.display = "flex";
+                    let myLocalVid = document.getElementById("my-local-video");
+                    myLocalVid.srcObject = stream;
+                    myLocalVid.setAttribute('autoplay', '');
+                    myLocalVid.setAttribute('playsinline', '');
+                    myLocalVid.muted = true; // Il tuo video locale deve sempre essere muto!
+                    myLocalVid.onloadedmetadata = function() { myLocalVid.play().catch(e=>{}); };
+                } else {
+                    document.getElementById("my-video-wrapper").style.display = "none";
+                }
+            }
+
+            myPeer = new Peer(peerConfig); 
+            
+            myPeer.on("call", function (call) {
+              call.answer(myAudioStream);
+              call.on("stream", function (userAudioStream) {
+                aggiungiMediaPlayer(call.peer, userAudioStream, call);
+              });
+              call.on("close", function() { distruggiVideo(call.peer); });
+              call.on("error", function() { distruggiVideo(call.peer); });
+            });
+
+            myPeer.on("open", function (id) {
+              if (socket) socket.emit("voiceReady", { room: myRoom, peerId: id }); 
+            });
+          })
+          .catch(function (err) {
+            alert("⚠️ ERRORE HARDWARE / PERMESSI:\n\n" + err.name + ": " + err.message + "\n\nUsa Chrome e controlla le autorizzazioni!");
+          });
+      };
+
+      window.accendiMicrofono = function() { accendiMedia(false); };
+      function distruggiVideo(peerId) {
+        let el1 = document.getElementById("wrapper-" + peerId);
+        let el2 = document.getElementById("media-" + peerId);
+        if (el1) el1.remove();
+        if (el2) el2.remove();
+      }
+
+      function aggiungiMediaPlayer(peerId, stream, callObj) {
+        if (!document.getElementById("media-" + peerId)) {
+          const media = document.createElement("video"); 
+          media.id = "media-" + peerId;
+          media.autoplay = true;
+          media.playsInline = true;
+          
+          // 🔥 FIX APPLE & ANDROID: Etichette obbligatorie per evitare schermi neri
+          media.setAttribute('autoplay', '');
+          media.setAttribute('playsinline', '');
+          
+          // 🔥 FIX XIAOMI: RISVEGLIO HARDWARE! Il video parte solo quando il chip dello Xiaomi l'ha decodificato
+          media.srcObject = stream;
+          media.onloadedmetadata = function(e) {
+              media.play().catch(err => console.log("Play bloccato dal browser", err));
+          };
+
+          stream.oninactive = function() { distruggiVideo(peerId); };
+
+          if (myRoom.includes("[AFK]")) {
+              media.style.width = "100%";
+              media.style.height = "100%";
+              media.style.objectFit = "cover";
+              
+              let wrapper = document.createElement("div");
+              wrapper.id = "wrapper-" + peerId;
+              wrapper.style.position = "relative";
+              wrapper.style.borderRadius = "12px";
+              wrapper.style.overflow = "hidden";
+              wrapper.style.background = "#141b29";
+              wrapper.style.border = "2px solid var(--border-color)";
+              wrapper.style.flex = "1 1 40%"; 
+              wrapper.style.maxWidth = "48%";
+              wrapper.style.minHeight = "120px";
+              wrapper.style.aspectRatio = "3/4";
+              
+              let label = document.createElement("div");
+              label.style.position = "absolute";
+              label.style.bottom = "5px";
+              label.style.left = "5px";
+              label.style.background = "rgba(0,0,0,0.7)";
+              label.style.padding = "2px 6px";
+              label.style.borderRadius = "4px";
+              label.style.fontSize = "0.7rem";
+              label.style.fontWeight = "bold";
+              label.innerText = "Spettatore"; 
+
+              wrapper.appendChild(media);
+              wrapper.appendChild(label);
+              document.getElementById("afk-video-grid").appendChild(wrapper);
+              
+          } else {
+              media.controls = false;
+              media.style.display = "none";
+              document.getElementById("audio-container").appendChild(media);
+          }
+
+          if (callObj) {
+            callObj.on("close", function() { distruggiVideo(peerId); });
+            callObj.on("error", function() { distruggiVideo(peerId); });
+          }
+        }
+      }
+
+      window.dichiaraBancarottaManuale = function () {
+        if (
+          !confirm(
+            "Sei sicuro di voler dichiarare bancarotta e ritirarti dalla partita?"
+          )
+        )
+          return;
+        bloccaTimer();
+        let mioP = players.find(function (pl) {
+          return String(pl.id) === String(gameMode === "multi" ? socket.id : 0);
+        });
+        if (!mioP || mioP.bankrupt) return;
+
+        mioP.bankrupt = true;
+        mioP.money = -1; // Per sicurezza
+
+        Object.keys(properties).forEach(function (k) {
+          if (String(properties[k].owner) === String(mioP.id)) {
+            properties[k].owner = null;
+            properties[k].houses = 0;
+            let tile = document.getElementById("tile-" + k);
+            if (tile) tile.style.boxShadow = "none";
+            let badge = tile ? tile.querySelector(".property-badge") : null;
+            if (badge) badge.remove();
+          }
+        });
+        updateTokens();
+
+        let msg = "🏳️ <b>" + mioP.name + " SI È ARRESO (BANCAROTTA)!</b>";
+        document.getElementById("game-log").innerHTML = msg;
+
+        if (gameMode === "multi" && socket) {
+          socket.emit("syncAction", {
+            room: myRoom,
+            players: players,
+            properties: properties,
+            logMsg: msg,
+          });
+          setTimeout(function () {
+            socket.emit("endTurn", { room: myRoom });
+          }, 2000);
+        } else {
+          setTimeout(function () {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            startTurnFlow();
+          }, 2000);
+        }
+      };
+
+      window.addEventListener("resize", function () {
+        if (document.getElementById("game-ui").style.display === "flex")
+          updateTokens();
+      });
+
+      // ---- MOTORE INSTALLAZIONE APP (PWA) ----
+      let deferredPrompt;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('install-banner').style.display = 'block';
+      });
+
+      document.getElementById('btn-install').addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            document.getElementById('install-banner').style.display = 'none';
+          }
+          deferredPrompt = null;
+        }
+      });
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('sw.js');
+        });
+      }
+    </script>
+  </body>
+</html>
