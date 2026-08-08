@@ -209,9 +209,16 @@ function controllaVittoriaF4(r, c, gioca) {
 }
 
 window.esciDaForza4 = function() {
-    if (confirm("Vuoi abbandonare la partita e tornare al Menu?")) {
-        if(isMultiplayerF4 && socket) socket.disconnect(); 
-        window.location.reload();
+    if (typeof customConfirm !== 'undefined') {
+        customConfirm("Vuoi abbandonare la partita e tornare al Menu?", function() {
+            if(isMultiplayerF4 && socket) socket.disconnect(); 
+            window.location.reload();
+        });
+    } else {
+        if (confirm("Vuoi abbandonare la partita e tornare al Menu?")) {
+            if(isMultiplayerF4 && socket) socket.disconnect(); 
+            window.location.reload();
+        }
     }
 };
 
