@@ -66,31 +66,31 @@ let mioObiettivoId = 0;
 
 const R_ZONES = { "centro": { color: "#8a2be2" }, "sud": { color: "#bd2a2a" }, "costa": { color: "#00bfff" }, "etnei": { color: "#3b7a3b" } };
 
-// 🔥 MAPPA RISTRETTA PER NON ANDARE FUORI SCHERMO SUL TELEFONO! 🔥
+// 🔥 MAPPA OTTIMIZZATA PER SCHERMI VERTICALI (X STRETTE, Y CENTRATE) 🔥
 const R_NODES = {
     // CENTRO
-    "duomo": { nome: "P.zza Duomo", zona: "centro", x: 50, y: 65, links: ["stesicoro", "playa", "licuti"] },
-    "stesicoro": { nome: "Stesicoro", zona: "centro", x: 50, y: 48, links: ["duomo", "borgo", "cibali", "ognina"] },
-    "borgo": { nome: "Il Borgo", zona: "centro", x: 45, y: 30, links: ["stesicoro", "cibali", "misterbianco", "trecastagni"] },
-    "cibali": { nome: "Cibali", zona: "centro", x: 32, y: 42, links: ["stesicoro", "borgo", "zialisa", "misterbianco"] },
+    "duomo": { nome: "P.zza Duomo", zona: "centro", x: 55, y: 65, links: ["stesicoro", "playa", "licuti"] },
+    "stesicoro": { nome: "Stesicoro", zona: "centro", x: 55, y: 50, links: ["duomo", "borgo", "cibali", "ognina"] },
+    "borgo": { nome: "Il Borgo", zona: "centro", x: 50, y: 35, links: ["stesicoro", "cibali", "misterbianco", "trecastagni"] },
+    "cibali": { nome: "Cibali", zona: "centro", x: 38, y: 45, links: ["stesicoro", "borgo", "zialisa", "misterbianco"] },
     
     // SUD
-    "playa": { nome: "La Playa", zona: "sud", x: 50, y: 82, links: ["duomo", "zialisa", "goretti"] },
-    "zialisa": { nome: "Zia Lisa", zona: "sud", x: 32, y: 72, links: ["playa", "librino", "cibali"] },
-    "librino": { nome: "Librino", zona: "sud", x: 18, y: 70, links: ["zialisa", "goretti", "misterbianco"] },
-    "goretti": { nome: "Vill. Goretti", zona: "sud", x: 30, y: 85, links: ["playa", "librino"] },
+    "playa": { nome: "La Playa", zona: "sud", x: 55, y: 80, links: ["duomo", "zialisa", "goretti"] },
+    "zialisa": { nome: "Zia Lisa", zona: "sud", x: 40, y: 72, links: ["playa", "librino", "cibali"] },
+    "librino": { nome: "Librino", zona: "sud", x: 25, y: 68, links: ["zialisa", "goretti", "misterbianco"] },
+    "goretti": { nome: "Vill. Goretti", zona: "sud", x: 35, y: 85, links: ["playa", "librino"] },
 
     // COSTA
-    "licuti": { nome: "S.G. Li Cuti", zona: "costa", x: 68, y: 68, links: ["duomo", "ognina"] },
-    "ognina": { nome: "Ognina", zona: "costa", x: 75, y: 52, links: ["licuti", "acicastello", "stesicoro"] },
-    "acicastello": { nome: "Acicastello", zona: "costa", x: 82, y: 38, links: ["ognina", "acitrezza", "trecastagni"] },
-    "acitrezza": { nome: "Acitrezza", zona: "costa", x: 82, y: 22, links: ["acicastello", "zafferana"] },
+    "licuti": { nome: "S.G. Li Cuti", zona: "costa", x: 72, y: 68, links: ["duomo", "ognina"] },
+    "ognina": { nome: "Ognina", zona: "costa", x: 78, y: 53, links: ["licuti", "acicastello", "stesicoro"] },
+    "acicastello": { nome: "Acicastello", zona: "costa", x: 82, y: 40, links: ["ognina", "acitrezza", "trecastagni"] },
+    "acitrezza": { nome: "Acitrezza", zona: "costa", x: 85, y: 25, links: ["acicastello", "zafferana"] },
 
     // ETNEI
-    "misterbianco": { nome: "Misterbianco", zona: "etnei", x: 18, y: 45, links: ["cibali", "borgo", "librino", "paterno"] },
-    "paterno": { nome: "Paternò", zona: "etnei", x: 25, y: 20, links: ["misterbianco"] },
-    "trecastagni": { nome: "Trecastagni", zona: "etnei", x: 60, y: 25, links: ["borgo", "acicastello", "zafferana"] },
-    "zafferana": { nome: "Zafferana", zona: "etnei", x: 72, y: 12, links: ["trecastagni", "acitrezza"] }
+    "misterbianco": { nome: "Misterbianco", zona: "etnei", x: 22, y: 48, links: ["cibali", "borgo", "librino", "paterno"] },
+    "paterno": { nome: "Paternò", zona: "etnei", x: 25, y: 22, links: ["misterbianco"] },
+    "trecastagni": { nome: "Trecastagni", zona: "etnei", x: 65, y: 28, links: ["borgo", "acicastello", "zafferana"] },
+    "zafferana": { nome: "Zafferana", zona: "etnei", x: 75, y: 15, links: ["trecastagni", "acitrezza"] }
 };
 
 let rPlayers = [];
@@ -116,7 +116,10 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
     creaMazzo();
     
     let mapDiv = document.getElementById("risiko-map");
-    mapDiv.style.transform = "scale(0.9)"; 
+    // 🔥 FIX RESPONSIVE: Usa percentuali invece di scale fisso, così si adatta a ogni schermo! 🔥
+    mapDiv.style.width = "100%";
+    mapDiv.style.height = "100%";
+    mapDiv.style.transform = "none"; 
     mapDiv.innerHTML = '<svg id="risiko-svg" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></svg>';
     
     let containerModals = document.createElement("div");
