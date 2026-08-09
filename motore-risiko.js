@@ -1,38 +1,21 @@
 // ==========================================
-// MOTORE RISIKO CATANESE (TOTALITY GAMES) - V5
-// Sincronizzazione Server, Vittoria, Nodi Stretti
+// MOTORE RISIKO CATANESE (TOTALITY GAMES) - V8 BLINDATA
+// Mappa a Ventaglio, Timer 60s, Diretta Battaglie, Zero Conflitti
 // ==========================================
 
 const styleRisiko = document.createElement('style');
 styleRisiko.innerHTML = `
-    #risiko-map-container {
-        position: relative; background-color: #0a0e17;
-        box-shadow: inset 0 0 50px rgba(0,0,0,0.9); overflow: hidden !important; 
-    }
-    #risiko-map-container::before {
-        content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-        background-image: url('mappa-catania.jpg'); background-size: cover; background-position: center;
-        filter: brightness(0.3) contrast(1.2) grayscale(0.5); pointer-events: none; z-index: 0;
-    }
+    #risiko-map-container { position: relative; background-color: #0a0e17; box-shadow: inset 0 0 50px rgba(0,0,0,0.9); overflow: hidden !important; }
+    #risiko-map-container::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: url('mappa-catania.jpg'); background-size: cover; background-position: center; filter: brightness(0.3) contrast(1.2) grayscale(0.5); pointer-events: none; z-index: 0; }
     #risiko-map { z-index: 1; }
     
-    .r-node {
-        position: absolute; width: clamp(50px, 9vw, 65px); height: clamp(50px, 9vw, 65px);
-        border-radius: 50%; background: #222; border: 3px solid #fff; transform: translate(-50%, -50%);
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.9), inset 0 0 10px rgba(0,0,0,0.5);
-        transition: transform 0.2s, box-shadow 0.2s, filter 0.2s; z-index: 2;
-    }
+    .r-node { position: absolute; width: clamp(50px, 9vw, 65px); height: clamp(50px, 9vw, 65px); border-radius: 50%; background: #222; border: 3px solid #fff; transform: translate(-50%, -50%); display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.9), inset 0 0 10px rgba(0,0,0,0.5); transition: transform 0.2s, box-shadow 0.2s, filter 0.2s; z-index: 2; }
     .r-node:hover { transform: translate(-50%, -50%) scale(1.1); z-index: 3; }
     .r-node.selected { border-color: #ffdf00; box-shadow: 0 0 30px #ffdf00; transform: translate(-50%, -50%) scale(1.15); z-index: 4; }
     .r-node.target { border-color: #ff4444; box-shadow: 0 0 30px #ff4444; animation: pulseTarget 1s infinite; cursor: crosshair; }
     .r-node.move-target { border-color: #00bfff; box-shadow: 0 0 30px #00bfff; animation: pulseTargetMove 1s infinite; cursor: pointer; }
     
-    .r-node-name {
-        position: absolute; top: -24px; background: rgba(0,0,0,0.95); padding: 2px 4px; 
-        border-radius: 4px; color: white; font-size: 0.65rem; font-weight: normal; white-space: nowrap; 
-        pointer-events: none; border: 1px solid #777; z-index: 10;
-    }
+    .r-node-name { position: absolute; top: -24px; background: rgba(0,0,0,0.95); padding: 2px 4px; border-radius: 4px; color: white; font-size: 0.65rem; font-weight: normal; white-space: nowrap; pointer-events: none; border: 1px solid #777; z-index: 10; }
     .r-node-troops { font-size: 1.4rem; font-weight: bold; color: white; text-shadow: 0 2px 4px black; pointer-events: none; display: flex; align-items: center; gap: 3px; }
     
     @keyframes pulseTarget { 0% { transform: translate(-50%, -50%) scale(1); filter: brightness(1); } 50% { transform: translate(-50%, -50%) scale(1.15); filter: brightness(1.5); } 100% { transform: translate(-50%, -50%) scale(1); filter: brightness(1); } }
@@ -47,13 +30,16 @@ styleRisiko.innerHTML = `
     .r-card { background: #fdf5e6; border: 4px solid var(--border-color); border-radius: 8px; width: 70px; height: 100px; display: flex; flex-direction: column; justify-content: space-around; align-items: center; color: black; box-shadow: 0 5px 15px rgba(0,0,0,0.8); padding: 5px;}
     .r-card-icon { font-size: 2.5rem; }
     .r-card-name { font-size: 0.5rem; font-weight: bold; text-align: center; }
+    #risiko-timer-box { background: #bd2a2a; border: 2px solid #fff; border-radius: 20px; padding: 2px 10px; font-weight: bold; color: white; display: inline-block; font-size: 1.2rem; min-width: 50px; text-align: center; box-shadow: 0 0 10px #bd2a2a; }
 `;
 document.head.appendChild(styleRisiko);
 
-const TIPI_CARTA = ["🛵", "🛺", "🐘"]; 
+// 🔥 VARIABILI RINOMINATE PER NON ENTRARE IN CONFLITTO CON TABOO 🔥
+let risikoTimerIntervallo = null;
+let risikoSecondiRimasti = 60;
+const R_TIPI_CARTA = ["🛵", "🛺", "🐘"]; 
 let mazzoRisiko = [];
 
-// 🔥 I CODICI DEGLI OBIETTIVI (Servono per controllare la Vittoria!)
 const R_OBIETTIVI = [
     { id: 1, text: "Conquista i 4 Quartieri del Sud (Zia Lisa, Playa, Goretti, Librino) e difendili." },
     { id: 2, text: "Conquista l'intero Centro Storico e almeno 2 Paesi Etnei." },
@@ -66,27 +52,19 @@ let mioObiettivoId = 0;
 
 const R_ZONES = { "centro": { color: "#8a2be2" }, "sud": { color: "#bd2a2a" }, "costa": { color: "#00bfff" }, "etnei": { color: "#3b7a3b" } };
 
-// 🔥 MAPPA ALLARGATA A VENTAGLIO PER EVITARE ACCAVALLAMENTI 🔥
 const R_NODES = {
-    // CENTRO
     "duomo": { nome: "P.zza Duomo", zona: "centro", x: 50, y: 55, links: ["stesicoro", "playa", "licuti"] },
     "stesicoro": { nome: "Stesicoro", zona: "centro", x: 50, y: 38, links: ["duomo", "borgo", "cibali", "ognina"] },
     "borgo": { nome: "Il Borgo", zona: "centro", x: 42, y: 22, links: ["stesicoro", "cibali", "misterbianco", "trecastagni"] },
     "cibali": { nome: "Cibali", zona: "centro", x: 30, y: 35, links: ["stesicoro", "borgo", "zialisa", "misterbianco"] },
-    
-    // SUD
     "playa": { nome: "La Playa", zona: "sud", x: 58, y: 80, links: ["duomo", "zialisa", "goretti"] },
     "zialisa": { nome: "Zia Lisa", zona: "sud", x: 35, y: 68, links: ["playa", "librino", "cibali"] },
     "librino": { nome: "Librino", zona: "sud", x: 18, y: 78, links: ["zialisa", "goretti", "misterbianco"] },
     "goretti": { nome: "Vill. Goretti", zona: "sud", x: 35, y: 92, links: ["playa", "librino"] },
-
-    // COSTA
     "licuti": { nome: "S.G. Li Cuti", zona: "costa", x: 75, y: 62, links: ["duomo", "ognina"] },
     "ognina": { nome: "Ognina", zona: "costa", x: 82, y: 45, links: ["licuti", "acicastello", "stesicoro"] },
     "acicastello": { nome: "Acicastello", zona: "costa", x: 85, y: 28, links: ["ognina", "acitrezza", "trecastagni"] },
     "acitrezza": { nome: "Acitrezza", zona: "costa", x: 85, y: 10, links: ["acicastello", "zafferana"] },
-
-    // ETNEI
     "misterbianco": { nome: "Misterbianco", zona: "etnei", x: 15, y: 48, links: ["cibali", "borgo", "librino", "paterno"] },
     "paterno": { nome: "Paternò", zona: "etnei", x: 22, y: 15, links: ["misterbianco"] },
     "trecastagni": { nome: "Trecastagni", zona: "etnei", x: 62, y: 18, links: ["borgo", "acicastello", "zafferana"] },
@@ -116,7 +94,6 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
     creaMazzo();
     
     let mapDiv = document.getElementById("risiko-map");
-    // 🔥 FIX RESPONSIVE: Usa percentuali invece di scale fisso, così si adatta a ogni schermo! 🔥
     mapDiv.style.width = "100%";
     mapDiv.style.height = "100%";
     mapDiv.style.transform = "none"; 
@@ -125,20 +102,20 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
     let containerModals = document.createElement("div");
     containerModals.innerHTML = `
         <div id="risiko-battle-modal">
-            <h2 id="r-battle-title" style="color:#ffdf00; font-size: 2rem; margin-bottom: 10px;">BATTAGLIA!</h2>
+            <h2 id="r-battle-title" style="color:#ffdf00; font-size: 1.5rem; margin-bottom: 5px; text-transform: uppercase;">BATTAGLIA!</h2>
+            <h4 id="r-battle-desc" style="color:#00bfff; font-size: 0.9rem; margin-top: 0; margin-bottom: 15px;">Quartiere ➔ Quartiere</h4>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%; gap: 5px;">
                 <div style="background: rgba(189,42,42,0.2); border: 2px solid #bd2a2a; border-radius: 8px; padding: 10px; width: 90%;">
-                    <h3 style="color:#ff4444; margin:0;">⚔️ ATTACCO</h3><div class="r-dice-box" id="r-att-dice"></div>
+                    <h3 id="r-battle-att-name" style="color:#ff4444; margin:0 0 5px 0;">ATTACCO</h3><div class="r-dice-box" id="r-att-dice"></div>
                 </div>
                 <h2 style="color:white; margin:0;">VS</h2>
                 <div style="background: rgba(44,74,138,0.2); border: 2px solid #2c4a8a; border-radius: 8px; padding: 10px; width: 90%;">
-                    <h3 style="color:#44ff44; margin:0;">🛡️ DIFESA</h3><div class="r-dice-box" id="r-def-dice"></div>
+                    <h3 id="r-battle-def-name" style="color:#44ff44; margin:0 0 5px 0;">DIFESA</h3><div class="r-dice-box" id="r-def-dice"></div>
                 </div>
             </div>
-            <h3 id="r-battle-result" style="color:white; font-size:1.3rem; margin-top:15px; min-height:40px;"></h3>
+            <h3 id="r-battle-result" style="color:white; font-size:1.2rem; margin-top:10px; min-height:40px;"></h3>
             <button id="btn-close-battle" class="btn" style="margin-top:10px; display:none; width:80%;" onclick="chiudiBattaglia()">CONTINUA</button>
         </div>
-        
         <div id="risiko-cards-modal">
             <h2 style="color:#00bfff; font-size: 1.8rem; margin-bottom: 5px;">LE TUE CARTE</h2>
             <div style="background:rgba(0,0,0,0.6); border:1px solid #c99c51; padding:10px; border-radius:8px; margin-bottom:15px; text-align:left; font-size:0.8rem; color:white;">
@@ -196,7 +173,6 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
     mioObiettivo = sc.text;
     mioObiettivoId = sc.id;
 
-    // 🔥 GESTIONE SERVER E MULTIPLAYER 🔥
     if(isMulti) {
         rPlayers = dati.players.map((p, i) => ({
             id: p.id, name: p.name, color: rColors[i % 4], isBot: false, cards: []
@@ -204,10 +180,14 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
         
         if(typeof window.alert === 'function') setTimeout(() => window.alert("IL TUO OBIETTIVO SEGRETO:<br><br>" + mioObiettivo), 500);
 
-        if(socket) {
-            socket.off("riceviTabooAzione"); // Usiamo il tunnel di Taboo per non farti modificare server.js!
+        if(typeof socket !== 'undefined' && socket) {
+            socket.off("riceviTabooAzione"); 
             socket.on("riceviTabooAzione", (data) => {
                 if(data.isRisiko) {
+                    if(data.azione === "inizio_battaglia") {
+                        eseguiAnimazioneBattaglia(data.attId, data.defId, data.resAtt, data.resDef, false);
+                        return; 
+                    }
                     Object.keys(data.nodes).forEach(k => {
                         R_NODES[k].owner = data.nodes[k].owner;
                         R_NODES[k].troops = data.nodes[k].troops;
@@ -225,7 +205,7 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
             });
         }
 
-        if(dati.hostId === socket.id) {
+        if(typeof socket !== 'undefined' && dati.hostId === socket.id) {
             distribuisciTerritoriIniziali();
             iniziaTurnoRisiko(0);
             setTimeout(() => syncRisikoNetwork("init"), 500);
@@ -245,9 +225,8 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
     }
 };
 
-// 🔥 FUNZIONE DI SINCRONIZZAZIONE SERVER (Il Vigile Elettronico) 🔥
 function syncRisikoNetwork(azione, datiExtra) {
-    if(isMultiplayerRisiko && socket) {
+    if(isMultiplayerRisiko && typeof socket !== 'undefined' && socket) {
         socket.emit("tabooAzione", {
             room: typeof myRoom !== 'undefined' ? myRoom : "",
             isRisiko: true, nodes: R_NODES, turnIndex: rTurnoIndex,
@@ -256,9 +235,55 @@ function syncRisikoNetwork(azione, datiExtra) {
     }
 }
 
-// 🔥 CONTROLLO DELLA VITTORIA ESATTO! 🔥
+function avviaTimerRisiko() {
+    clearInterval(risikoTimerIntervallo);
+    risikoSecondiRimasti = 60;
+    
+    let divTitolo = document.getElementById("risiko-fase-titolo");
+    if(divTitolo && !document.getElementById("risiko-timer-box")) {
+        let parent = divTitolo.parentNode;
+        parent.innerHTML = `
+            <div style="display:flex; justify-content:center; align-items:center; gap: 15px; width: 100%;">
+                <span id="risiko-fase-titolo" style="color: #c99c51; font-weight: bold; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px;"></span>
+                <span id="risiko-timer-box">60</span>
+            </div>
+            <span id="risiko-info-turno" style="color: white; font-size: 0.85rem; margin-top:5px;">Attesa...</span>
+        `;
+    }
+
+    let timerBox = document.getElementById("risiko-timer-box");
+    if(!timerBox) return;
+    
+    timerBox.innerText = risikoSecondiRimasti;
+    timerBox.style.background = "#bd2a2a"; 
+    
+    risikoTimerIntervallo = setInterval(() => {
+        risikoSecondiRimasti--;
+        if(risikoSecondiRimasti <= 10) timerBox.style.background = "#ffdf00"; 
+        if(risikoSecondiRimasti < 0) risikoSecondiRimasti = 0;
+        timerBox.innerText = risikoSecondiRimasti;
+        
+        let p = rPlayers[rTurnoIndex]; 
+        let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
+        if (risikoSecondiRimasti === 0 && p.id === mioId) {
+            clearInterval(risikoTimerIntervallo);
+            if (rFase === 0 && rTruppeDaPiazzare > 0) {
+                let mieZone = Object.keys(R_NODES).filter(k => R_NODES[k].owner === p.id);
+                while(rTruppeDaPiazzare > 0) {
+                    let z = mieZone[Math.floor(Math.random() * mieZone.length)];
+                    R_NODES[z].troops++; rTruppeDaPiazzare--;
+                }
+                syncRisikoNetwork("piazza_truppa");
+            }
+            // 🔥 IL TEMPO È SCADUTO: FINE DEL TURNO DIRETTA! SALTA LE ALTRE FASI 🔥
+            chiudiTurno(); 
+        }
+    }, 1000);
+}
+
 function controllaVittoriaGlobale() {
-    let ioP = rPlayers.find(p => p.id === (isMultiplayerRisiko ? socket.id : "p0"));
+    let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
+    let ioP = rPlayers.find(p => p.id === mioId);
     if(!ioP) return;
 
     let mieZone = Object.keys(R_NODES).filter(k => R_NODES[k].owner === ioP.id);
@@ -284,7 +309,7 @@ function controllaVittoriaGlobale() {
 
 function creaMazzo() {
     mazzoRisiko = [];
-    Object.keys(R_NODES).forEach((k, index) => { mazzoRisiko.push({ tipo: TIPI_CARTA[index % 3], terr: R_NODES[k].nome }); });
+    Object.keys(R_NODES).forEach((k, index) => { mazzoRisiko.push({ tipo: R_TIPI_CARTA[index % 3], terr: R_NODES[k].nome }); });
     mazzoRisiko.push({ tipo: "🃏", terr: "JOLLY" }); mazzoRisiko.push({ tipo: "🃏", terr: "JOLLY" });
     mazzoRisiko.sort(() => Math.random() - 0.5); 
 }
@@ -301,7 +326,8 @@ function pescaCartaRisiko(player) {
 }
 
 window.apriCarteRisiko = function() {
-    let p = rPlayers.find(pl => pl.id === (isMultiplayerRisiko ? socket.id : "p0"));
+    let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
+    let p = rPlayers.find(pl => pl.id === mioId);
     let listDiv = document.getElementById("r-cards-list");
     let modal = document.getElementById("risiko-cards-modal");
     
@@ -319,7 +345,8 @@ window.apriCarteRisiko = function() {
 window.chiudiCarteRisiko = function() { document.getElementById("risiko-cards-modal").style.display = "none"; };
 
 window.scambiaCarte = function() {
-    let p = rPlayers.find(pl => pl.id === (isMultiplayerRisiko ? socket.id : "p0"));
+    let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
+    let p = rPlayers.find(pl => pl.id === mioId);
     p.cards.splice(0, 3); 
     rTruppeDaPiazzare += 8; 
     if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('cassa'); }catch(e){}
@@ -357,24 +384,31 @@ function aggiornaMappaRisiko() {
             nodeDiv.style.background = p.color;
             textDiv.innerHTML = `${n.troops} <span style="font-size:1rem;">${ottieniIconaArmata(n.troops)}</span>`;
         }
-        nodeDiv.classList.remove("selected", "target", "move-target");
+        if(nodeDiv) nodeDiv.classList.remove("selected", "target", "move-target");
     });
     
     if (rNodeSelected) {
-        document.getElementById("rn-" + rNodeSelected).classList.add("selected");
+        let nodeDiv = document.getElementById("rn-" + rNodeSelected);
+        if(nodeDiv) nodeDiv.classList.add("selected");
         R_NODES[rNodeSelected].links.forEach(lId => {
-            if (rFase === 1 && R_NODES[lId].owner !== R_NODES[rNodeSelected].owner) {
-                document.getElementById("rn-" + lId).classList.add("target");
-            } else if (rFase === 2 && R_NODES[lId].owner === R_NODES[rNodeSelected].owner) {
-                document.getElementById("rn-" + lId).classList.add("move-target");
+            let linkDiv = document.getElementById("rn-" + lId);
+            if(linkDiv) {
+                if (rFase === 1 && R_NODES[lId].owner !== R_NODES[rNodeSelected].owner) {
+                    linkDiv.classList.add("target");
+                } else if (rFase === 2 && R_NODES[lId].owner === R_NODES[rNodeSelected].owner) {
+                    linkDiv.classList.add("move-target");
+                }
             }
         });
     }
     
-    let mioP = rPlayers.find(p => p.id === (isMultiplayerRisiko ? socket.id : "p0"));
+    let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
+    let mioP = rPlayers.find(p => p.id === mioId);
     if(mioP) {
-        document.getElementById("risiko-zone-tue").innerText = Object.values(R_NODES).filter(n => n.owner === mioP.id).length;
-        document.getElementById("risiko-truppe-disp").innerText = rTruppeDaPiazzare;
+        let zoneTue = document.getElementById("risiko-zone-tue");
+        let truppeDisp = document.getElementById("risiko-truppe-disp");
+        if(zoneTue) zoneTue.innerText = Object.values(R_NODES).filter(n => n.owner === mioP.id).length;
+        if(truppeDisp) truppeDisp.innerText = rTruppeDaPiazzare;
     }
 }
 
@@ -397,13 +431,13 @@ function iniziaTurnoRisiko(idx) {
     }
 }
 
-function passaFaseManuale() {
+function passaFaseManuale(forzatoDalTimer = false) {
     let p = rPlayers[rTurnoIndex];
-    let mioId = isMultiplayerRisiko ? socket.id : "p0";
+    let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
     if(p.id !== mioId) return;
     
     if (rFase === 0) {
-        if(rTruppeDaPiazzare > 0) { window.alert("Devi piazzare tutte le truppe prima di attaccare!"); return; }
+        if(!forzatoDalTimer && rTruppeDaPiazzare > 0) { if(typeof window.alert === 'function') window.alert("Devi piazzare tutte le truppe prima di attaccare!"); return; }
         impostaFaseRisiko(1);
     } else if (rFase === 1) {
         rNodeSelected = null; impostaFaseRisiko(2);
@@ -423,37 +457,43 @@ function chiudiTurno() {
 function impostaFaseRisiko(fase) {
     rFase = fase;
     let p = rPlayers[rTurnoIndex];
-    let isMyTurn = (p.id === (isMultiplayerRisiko ? socket.id : "p0"));
+    let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
+    let isMyTurn = (p.id === mioId);
     
     let titolo = document.getElementById("risiko-fase-titolo");
     let info = document.getElementById("risiko-info-turno");
     let btn1 = document.getElementById("btn-risiko-azione1");
     let btn2 = document.getElementById("btn-risiko-azione2");
     
-    btn2.onclick = passaFaseManuale;
+    if(btn2) btn2.onclick = () => passaFaseManuale(false);
+
+    // 🔥 IL TIMER PARTE E SI AZZERA SOLO ALL'INIZIO DEL TURNO (FASE 0) 🔥
+    if (fase === 0) {
+        avviaTimerRisiko();
+    }
 
     if(fase === 0) {
-        titolo.innerText = "FASE 1: RINFORZI";
-        info.innerHTML = isMyTurn ? "<b style='color:#44ff44;'>Tocca a te! Piazza le armate.</b>" : `Turno di <b style='color:${p.color};'>${p.name}</b>`;
-        btn1.innerText = isMyTurn ? `PIAZZA ${rTruppeDaPiazzare} 🛵` : "ATTENDI";
-        btn2.disabled = !isMyTurn; btn2.innerText = "VAI ALL'ATTACCO";
+        if(titolo) titolo.innerText = "FASE 1: RINFORZI";
+        if(info) info.innerHTML = isMyTurn ? "<b style='color:#44ff44;'>Tocca a te! Piazza le armate.</b>" : `Turno di <b style='color:${p.color};'>${p.name}</b>`;
+        if(btn1) btn1.innerText = isMyTurn ? `PIAZZA ${rTruppeDaPiazzare} 🛵` : "ATTENDI";
+        if(btn2) { btn2.disabled = !isMyTurn; btn2.innerText = "VAI ALL'ATTACCO"; }
     } else if (fase === 1) {
-        titolo.innerText = "FASE 2: ATTACCO";
-        info.innerHTML = isMyTurn ? "<b style='color:#ff4444;'>Seleziona chi attaccare! 🎯</b>" : `Attacco in corso...`;
-        btn1.innerText = isMyTurn ? "SELEZIONA BERSAGLIO 🎯" : "ATTENDI";
-        btn2.disabled = !isMyTurn; btn2.innerText = "FINE ATTACCO";
+        if(titolo) titolo.innerText = "FASE 2: ATTACCO";
+        if(info) info.innerHTML = isMyTurn ? "<b style='color:#ff4444;'>Seleziona chi attaccare! 🎯</b>" : `Attacco in corso...`;
+        if(btn1) btn1.innerText = isMyTurn ? "SELEZIONA BERSAGLIO 🎯" : "ATTENDI";
+        if(btn2) { btn2.disabled = !isMyTurn; btn2.innerText = "FINE ATTACCO"; }
     } else if (fase === 2) {
-        titolo.innerText = "FASE 3: SPOSTAMENTO";
-        info.innerHTML = isMyTurn ? "<b style='color:#00bfff;'>Sposta truppe (1 spostamento)</b>" : `Spostamento in corso...`;
-        btn1.innerText = isMyTurn ? "DA DOVE SPOSTARE?" : "ATTENDI";
-        btn2.disabled = !isMyTurn; btn2.innerText = "PASSA IL TURNO";
+        if(titolo) titolo.innerText = "FASE 3: SPOSTAMENTO";
+        if(info) info.innerHTML = isMyTurn ? "<b style='color:#00bfff;'>Sposta truppe (1 spostamento)</b>" : `Spostamento in corso...`;
+        if(btn1) btn1.innerText = isMyTurn ? "DA DOVE SPOSTARE?" : "ATTENDI";
+        if(btn2) { btn2.disabled = !isMyTurn; btn2.innerText = "PASSA IL TURNO"; }
     }
     aggiornaMappaRisiko();
 }
 
 window.clickNodoRisiko = function(id) {
     let p = rPlayers[rTurnoIndex];
-    let mioId = isMultiplayerRisiko ? socket.id : "p0";
+    let mioId = isMultiplayerRisiko && typeof socket !== 'undefined' ? socket.id : "p0";
     if(p.id !== mioId) return; 
     let n = R_NODES[id];
     
@@ -464,90 +504,126 @@ window.clickNodoRisiko = function(id) {
             aggiornaMappaRisiko();
             syncRisikoNetwork("piazza_truppa");
             
-            if(rTruppeDaPiazzare === 0) document.getElementById("btn-risiko-azione1").innerText = "PRONTO PER ATTACCARE";
-            else document.getElementById("btn-risiko-azione1").innerText = `PIAZZA ${rTruppeDaPiazzare} 🛵`;
+            let btn1 = document.getElementById("btn-risiko-azione1");
+            if(btn1) {
+                if(rTruppeDaPiazzare === 0) btn1.innerText = "PRONTO PER ATTACCARE";
+                else btn1.innerText = `PIAZZA ${rTruppeDaPiazzare} 🛵`;
+            }
         }
     } else if (rFase === 1) {
         if (n.owner === p.id) {
             if (n.troops > 1) { rNodeSelected = id; aggiornaMappaRisiko(); }
         } else if (rNodeSelected && R_NODES[rNodeSelected].links.includes(id)) {
-            avviaBattagliaAnimata(rNodeSelected, id);
+            preparaBattagliaInDiretta(rNodeSelected, id);
         }
     } else if (rFase === 2) {
         if (n.owner === p.id) {
             if (!rNodeSelected) {
-                if (n.troops > 1) { rNodeSelected = id; aggiornaMappaRisiko(); document.getElementById("btn-risiko-azione1").innerText = "DOVE LE MANDI?"; }
+                if (n.troops > 1) { rNodeSelected = id; aggiornaMappaRisiko(); let b = document.getElementById("btn-risiko-azione1"); if(b) b.innerText = "DOVE LE MANDI?"; }
             } else {
                 if (rNodeSelected === id) {
-                    rNodeSelected = null; aggiornaMappaRisiko(); document.getElementById("btn-risiko-azione1").innerText = "DA DOVE SPOSTARE?";
+                    rNodeSelected = null; aggiornaMappaRisiko(); let b = document.getElementById("btn-risiko-azione1"); if(b) b.innerText = "DA DOVE SPOSTARE?";
                 } else if (R_NODES[rNodeSelected].links.includes(id)) {
                     R_NODES[rNodeSelected].troops--; n.troops++;
                     if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('dadi'); }catch(e){} 
                     aggiornaMappaRisiko();
                     syncRisikoNetwork("sposta_truppa");
-                    if(R_NODES[rNodeSelected].troops === 1) { rNodeSelected = null; aggiornaMappaRisiko(); document.getElementById("btn-risiko-azione1").innerText = "DA DOVE SPOSTARE?"; }
+                    if(R_NODES[rNodeSelected].troops === 1) { rNodeSelected = null; aggiornaMappaRisiko(); let b = document.getElementById("btn-risiko-azione1"); if(b) b.innerText = "DA DOVE SPOSTARE?"; }
                 }
             }
         }
     }
 };
 
-const dadiFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+const rDadiFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
-function avviaBattagliaAnimata(attId, defId) {
+function preparaBattagliaInDiretta(attId, defId) {
     let nAtt = R_NODES[attId]; let nDef = R_NODES[defId];
+    let numDadiAtt = Math.min(3, nAtt.troops - 1); let numDadiDef = Math.min(3, nDef.troops);
+    
+    let resAtt = Array(numDadiAtt).fill(0).map(() => Math.floor(Math.random()*6)+1).sort((a,b)=>b-a);
+    let resDef = Array(numDadiDef).fill(0).map(() => Math.floor(Math.random()*6)+1).sort((a,b)=>b-a);
+    
+    syncRisikoNetwork("inizio_battaglia", { attId: attId, defId: defId, resAtt: resAtt, resDef: resDef });
+    eseguiAnimazioneBattaglia(attId, defId, resAtt, resDef, true);
+}
+
+function eseguiAnimazioneBattaglia(attId, defId, resAtt, resDef, isAttaccante) {
+    let nAtt = R_NODES[attId]; let nDef = R_NODES[defId];
+    let plAtt = rPlayers.find(pl => pl.id === nAtt.owner);
+    let plDef = rPlayers.find(pl => pl.id === nDef.owner);
+    let nomeAttaccante = plAtt ? plAtt.name : "Sconosciuto";
+    let nomeDifensore = plDef ? plDef.name : "Sconosciuto";
+    
     let modal = document.getElementById("risiko-battle-modal");
     let attBox = document.getElementById("r-att-dice"); let defBox = document.getElementById("r-def-dice");
     let resText = document.getElementById("r-battle-result"); let btnClose = document.getElementById("btn-close-battle");
     
-    modal.style.display = "flex"; resText.innerText = "LANCIO IN CORSO..."; btnClose.style.display = "none";
-    attBox.innerHTML = ""; defBox.innerHTML = "";
+    let tTitle = document.getElementById("r-battle-title");
+    let tDesc = document.getElementById("r-battle-desc");
+    let tAttName = document.getElementById("r-battle-att-name");
+    let tDefName = document.getElementById("r-battle-def-name");
+
+    if(tTitle) tTitle.innerText = `${nomeAttaccante} vs ${nomeDifensore}`;
+    if(tDesc) tDesc.innerText = `${nAtt.nome} ➔ ${nDef.nome}`;
+    if(tAttName) tAttName.innerText = "⚔️ " + nomeAttaccante;
+    if(tDefName) tDefName.innerText = "🛡️ " + nomeDifensore;
     
-    let numDadiAtt = Math.min(3, nAtt.troops - 1); let numDadiDef = Math.min(3, nDef.troops);
+    if(modal) modal.style.display = "flex"; 
+    if(resText) resText.innerText = "LANCIO IN CORSO..."; 
+    if(btnClose) btnClose.style.display = "none";
+    if(attBox) attBox.innerHTML = ""; 
+    if(defBox) defBox.innerHTML = "";
+    
     if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('dadi'); }catch(e){}
     
-    let rollCount = 0;
+    let rollCount = 0; let numDadiAtt = resAtt.length; let numDadiDef = resDef.length;
+    
     let anim = setInterval(() => {
-        attBox.innerHTML = Array(numDadiAtt).fill(0).map(() => `<div class="r-dice red">${dadiFaces[Math.floor(Math.random()*6)]}</div>`).join("");
-        defBox.innerHTML = Array(numDadiDef).fill(0).map(() => `<div class="r-dice blue">${dadiFaces[Math.floor(Math.random()*6)]}</div>`).join("");
+        if(attBox) attBox.innerHTML = Array(numDadiAtt).fill(0).map(() => `<div class="r-dice red">${rDadiFaces[Math.floor(Math.random()*6)]}</div>`).join("");
+        if(defBox) defBox.innerHTML = Array(numDadiDef).fill(0).map(() => `<div class="r-dice blue">${rDadiFaces[Math.floor(Math.random()*6)]}</div>`).join("");
         rollCount++;
         
         if (rollCount >= 15) {
             clearInterval(anim);
-            let resAtt = Array(numDadiAtt).fill(0).map(() => Math.floor(Math.random()*6)+1).sort((a,b)=>b-a);
-            let resDef = Array(numDadiDef).fill(0).map(() => Math.floor(Math.random()*6)+1).sort((a,b)=>b-a);
-            
-            attBox.innerHTML = resAtt.map(v => `<div class="r-dice red">${dadiFaces[v-1]}</div>`).join("");
-            defBox.innerHTML = resDef.map(v => `<div class="r-dice blue">${dadiFaces[v-1]}</div>`).join("");
+            if(attBox) attBox.innerHTML = resAtt.map(v => `<div class="r-dice red">${rDadiFaces[v-1]}</div>`).join("");
+            if(defBox) defBox.innerHTML = resDef.map(v => `<div class="r-dice blue">${rDadiFaces[v-1]}</div>`).join("");
             
             let armatePerseAtt = 0; let armatePerseDef = 0;
             let confronti = Math.min(numDadiAtt, numDadiDef);
             for(let i=0; i<confronti; i++) { if (resAtt[i] > resDef[i]) armatePerseDef++; else armatePerseAtt++; }
             
-            nAtt.troops -= armatePerseAtt; nDef.troops -= armatePerseDef;
-            
-            if (nDef.troops <= 0) {
-                nDef.owner = nAtt.owner; nDef.troops = numDadiAtt - armatePerseAtt; nAtt.troops -= (numDadiAtt - armatePerseAtt);
-                resText.innerHTML = "<span style='color:#44ff44;'>🎯 TERRITORIO CONQUISTATO!</span>";
-                if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('vittoria'); }catch(e){}
-                rNodeSelected = null; haConquistatoTerritorio = true; 
+            if (isAttaccante) {
+                nAtt.troops -= armatePerseAtt; nDef.troops -= armatePerseDef;
+                if (nDef.troops <= 0) {
+                    nDef.owner = nAtt.owner; nDef.troops = numDadiAtt - armatePerseAtt; nAtt.troops -= (numDadiAtt - armatePerseAtt);
+                    if(resText) resText.innerHTML = "<span style='color:#44ff44;'>🎯 TERRITORIO CONQUISTATO!</span>";
+                    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('vittoria'); }catch(e){}
+                    rNodeSelected = null; haConquistatoTerritorio = true; 
+                } else {
+                    if(resText) resText.innerHTML = `${nomeAttaccante} perde ${armatePerseAtt} 🛵<br>${nomeDifensore} perde ${armatePerseDef} 🛵`;
+                    if(nAtt.troops === 1) rNodeSelected = null; 
+                }
+                aggiornaMappaRisiko(); syncRisikoNetwork("fine_battaglia_risultato"); controllaVittoriaGlobale();
             } else {
-                resText.innerHTML = `L'Attaccante perde ${armatePerseAtt} 🛵<br>La Difesa perde ${armatePerseDef} 🛵`;
-                if(nAtt.troops === 1) rNodeSelected = null; 
+                if (nDef.troops - armatePerseDef <= 0) {
+                    if(resText) resText.innerHTML = "<span style='color:#44ff44;'>🎯 TERRITORIO CONQUISTATO!</span>";
+                } else {
+                    if(resText) resText.innerHTML = `${nomeAttaccante} perde ${armatePerseAtt} 🛵<br>${nomeDifensore} perde ${armatePerseDef} 🛵`;
+                }
             }
-            
-            aggiornaMappaRisiko();
-            syncRisikoNetwork("battaglia");
-            controllaVittoriaGlobale();
-            btnClose.style.display = "block";
+            if(btnClose) btnClose.style.display = "block";
         }
     }, 60);
 }
 
-window.chiudiBattaglia = function() { document.getElementById("risiko-battle-modal").style.display = "none"; }
+window.chiudiBattaglia = function() { 
+    let modal = document.getElementById("risiko-battle-modal");
+    if(modal) modal.style.display = "none"; 
+}
 
 function eseguiTurnoBot(bot) {
-    if(isMultiplayerRisiko) return; // In multi giocano gli umani
+    if(isMultiplayerRisiko) return; 
     haConquistatoTerritorio = false;
     let mieZone = Object.keys(R_NODES).filter(k => R_NODES[k].owner === bot.id);
     
@@ -561,21 +637,17 @@ function eseguiTurnoBot(bot) {
         if(attaccanti.length > 0) {
             let attId = attaccanti[0]; let bersagli = R_NODES[attId].links.filter(k => R_NODES[k].owner !== bot.id);
             if(bersagli.length > 0) {
-                let nAtt = R_NODES[attId]; let nDef = R_NODES[bersagli[0]];
-                let dadoAtt = Math.floor(Math.random()*6)+1; let dadoDef = Math.floor(Math.random()*6)+1;
-                if(dadoAtt > dadoDef) {
-                    nDef.troops--;
-                    if(nDef.troops <= 0) { nDef.owner = bot.id; nDef.troops = 1; nAtt.troops--; haConquistatoTerritorio = true;}
-                } else { nAtt.troops--; }
-                aggiornaMappaRisiko();
-                
-                // Controlla se il bot ha vinto (Guerra totale per i bot: 12 territori)
-                let c = Object.keys(R_NODES).filter(k => R_NODES[k].owner === bot.id).length;
-                if (c >= 12) {
-                    if(typeof window.alert === 'function') window.alert("☠️ " + bot.name + " HA CONQUISTATO CATANIA!");
-                    setTimeout(() => window.location.reload(), 4000);
-                    return;
-                }
+                preparaBattagliaInDiretta(attId, bersagli[0]);
+                setTimeout(() => {
+                    let c = Object.keys(R_NODES).filter(k => R_NODES[k].owner === bot.id).length;
+                    if (c >= 12) {
+                        if(typeof window.alert === 'function') window.alert("☠️ " + bot.name + " HA CONQUISTATO CATANIA!");
+                        setTimeout(() => window.location.reload(), 4000);
+                        return;
+                    }
+                    setTimeout(() => { chiudiTurno(); }, 2000);
+                }, 3000);
+                return;
             }
         }
         setTimeout(() => { chiudiTurno(); }, 1500);
