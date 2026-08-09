@@ -29,9 +29,9 @@ styleRisiko.innerHTML = `
     .r-node.move-target { border-color: #00bfff; box-shadow: 0 0 30px #00bfff; animation: pulseTargetMove 1s infinite; cursor: pointer; }
     
     .r-node-name {
-        position: absolute; top: -22px; background: rgba(0,0,0,0.95); padding: 2px 6px; 
-        border-radius: 4px; color: white; font-size: 0.8rem; font-weight: bold; white-space: nowrap; 
-        pointer-events: none; border: 1px solid #555;
+        position: absolute; top: -24px; background: rgba(0,0,0,0.95); padding: 2px 4px; 
+        border-radius: 4px; color: white; font-size: 0.65rem; font-weight: normal; white-space: nowrap; 
+        pointer-events: none; border: 1px solid #777; z-index: 10;
     }
     .r-node-troops { font-size: 1.4rem; font-weight: bold; color: white; text-shadow: 0 2px 4px black; pointer-events: none; display: flex; align-items: center; gap: 3px; }
     
@@ -66,31 +66,31 @@ let mioObiettivoId = 0;
 
 const R_ZONES = { "centro": { color: "#8a2be2" }, "sud": { color: "#bd2a2a" }, "costa": { color: "#00bfff" }, "etnei": { color: "#3b7a3b" } };
 
-// 🔥 MAPPA OTTIMIZZATA PER SCHERMI VERTICALI (X STRETTE, Y CENTRATE) 🔥
+// 🔥 MAPPA ALLARGATA A VENTAGLIO PER EVITARE ACCAVALLAMENTI 🔥
 const R_NODES = {
     // CENTRO
-    "duomo": { nome: "P.zza Duomo", zona: "centro", x: 55, y: 65, links: ["stesicoro", "playa", "licuti"] },
-    "stesicoro": { nome: "Stesicoro", zona: "centro", x: 55, y: 50, links: ["duomo", "borgo", "cibali", "ognina"] },
-    "borgo": { nome: "Il Borgo", zona: "centro", x: 50, y: 35, links: ["stesicoro", "cibali", "misterbianco", "trecastagni"] },
-    "cibali": { nome: "Cibali", zona: "centro", x: 38, y: 45, links: ["stesicoro", "borgo", "zialisa", "misterbianco"] },
+    "duomo": { nome: "P.zza Duomo", zona: "centro", x: 50, y: 55, links: ["stesicoro", "playa", "licuti"] },
+    "stesicoro": { nome: "Stesicoro", zona: "centro", x: 50, y: 38, links: ["duomo", "borgo", "cibali", "ognina"] },
+    "borgo": { nome: "Il Borgo", zona: "centro", x: 42, y: 22, links: ["stesicoro", "cibali", "misterbianco", "trecastagni"] },
+    "cibali": { nome: "Cibali", zona: "centro", x: 30, y: 35, links: ["stesicoro", "borgo", "zialisa", "misterbianco"] },
     
     // SUD
-    "playa": { nome: "La Playa", zona: "sud", x: 55, y: 80, links: ["duomo", "zialisa", "goretti"] },
-    "zialisa": { nome: "Zia Lisa", zona: "sud", x: 40, y: 72, links: ["playa", "librino", "cibali"] },
-    "librino": { nome: "Librino", zona: "sud", x: 25, y: 68, links: ["zialisa", "goretti", "misterbianco"] },
-    "goretti": { nome: "Vill. Goretti", zona: "sud", x: 35, y: 85, links: ["playa", "librino"] },
+    "playa": { nome: "La Playa", zona: "sud", x: 58, y: 80, links: ["duomo", "zialisa", "goretti"] },
+    "zialisa": { nome: "Zia Lisa", zona: "sud", x: 35, y: 68, links: ["playa", "librino", "cibali"] },
+    "librino": { nome: "Librino", zona: "sud", x: 18, y: 78, links: ["zialisa", "goretti", "misterbianco"] },
+    "goretti": { nome: "Vill. Goretti", zona: "sud", x: 35, y: 92, links: ["playa", "librino"] },
 
     // COSTA
-    "licuti": { nome: "S.G. Li Cuti", zona: "costa", x: 72, y: 68, links: ["duomo", "ognina"] },
-    "ognina": { nome: "Ognina", zona: "costa", x: 78, y: 53, links: ["licuti", "acicastello", "stesicoro"] },
-    "acicastello": { nome: "Acicastello", zona: "costa", x: 82, y: 40, links: ["ognina", "acitrezza", "trecastagni"] },
-    "acitrezza": { nome: "Acitrezza", zona: "costa", x: 85, y: 25, links: ["acicastello", "zafferana"] },
+    "licuti": { nome: "S.G. Li Cuti", zona: "costa", x: 75, y: 62, links: ["duomo", "ognina"] },
+    "ognina": { nome: "Ognina", zona: "costa", x: 82, y: 45, links: ["licuti", "acicastello", "stesicoro"] },
+    "acicastello": { nome: "Acicastello", zona: "costa", x: 85, y: 28, links: ["ognina", "acitrezza", "trecastagni"] },
+    "acitrezza": { nome: "Acitrezza", zona: "costa", x: 85, y: 10, links: ["acicastello", "zafferana"] },
 
     // ETNEI
-    "misterbianco": { nome: "Misterbianco", zona: "etnei", x: 22, y: 48, links: ["cibali", "borgo", "librino", "paterno"] },
-    "paterno": { nome: "Paternò", zona: "etnei", x: 25, y: 22, links: ["misterbianco"] },
-    "trecastagni": { nome: "Trecastagni", zona: "etnei", x: 65, y: 28, links: ["borgo", "acicastello", "zafferana"] },
-    "zafferana": { nome: "Zafferana", zona: "etnei", x: 75, y: 15, links: ["trecastagni", "acitrezza"] }
+    "misterbianco": { nome: "Misterbianco", zona: "etnei", x: 15, y: 48, links: ["cibali", "borgo", "librino", "paterno"] },
+    "paterno": { nome: "Paternò", zona: "etnei", x: 22, y: 15, links: ["misterbianco"] },
+    "trecastagni": { nome: "Trecastagni", zona: "etnei", x: 62, y: 18, links: ["borgo", "acicastello", "zafferana"] },
+    "zafferana": { nome: "Zafferana", zona: "etnei", x: 65, y: 5, links: ["trecastagni", "acitrezza"] }
 };
 
 let rPlayers = [];
