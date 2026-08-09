@@ -1,6 +1,6 @@
 // ==========================================
-// MOTORE RISIKO CATANESE (TOTALITY GAMES) - V8 BLINDATA
-// Mappa a Ventaglio, Timer 60s, Diretta Battaglie, Zero Conflitti
+// MOTORE RISIKO CATANESE (TOTALITY GAMES) - V8 DEFINITIVA
+// Mappa a Ventaglio, Timer 60s, Diretta Battaglie, Suoni Iniettati!
 // ==========================================
 
 const styleRisiko = document.createElement('style');
@@ -33,6 +33,8 @@ styleRisiko.innerHTML = `
     #risiko-timer-box { background: #bd2a2a; border: 2px solid #fff; border-radius: 20px; padding: 2px 10px; font-weight: bold; color: white; display: inline-block; font-size: 1.2rem; min-width: 50px; text-align: center; box-shadow: 0 0 10px #bd2a2a; }
 `;
 document.head.appendChild(styleRisiko);
+
+
 
 // 🔥 VARIABILI RINOMINATE PER NON ENTRARE IN CONFLITTO CON TABOO 🔥
 let risikoTimerIntervallo = null;
@@ -129,6 +131,12 @@ window.avviaPartitaRisiko = function(isMulti, dati) {
             <button id="btn-scambia-carte" class="btn" style="background:#c99c51; color:black; margin-top:20px; display:none;" onclick="scambiaCarte()">GIOCA COMBO E PRENDI TRUPPE!</button>
             <button class="btn secondary" style="margin-top:20px;" onclick="chiudiCarteRisiko()">CHIUDI INVENTARIO</button>
         </div>
+
+        <!-- 🔥 SUONI INIETTATI QUI IN MODO SICURO! 🔥 -->
+        <audio id="audio-truppa" src="truppa.mp3" preload="auto"></audio>
+        <audio id="audio-marcia" src="marcia.mp3" preload="auto"></audio>
+        <audio id="audio-conquista" src="esplosione.mp3" preload="auto"></audio>
+        <audio id="audio-combo" src="combo.mp3" preload="auto"></audio>
     `;
     document.getElementById("risiko-ui").appendChild(containerModals);
 
@@ -275,8 +283,7 @@ function avviaTimerRisiko() {
                 }
                 syncRisikoNetwork("piazza_truppa");
             }
-            // 🔥 IL TEMPO È SCADUTO: FINE DEL TURNO DIRETTA! SALTA LE ALTRE FASI 🔥
-            chiudiTurno(); 
+            passaFaseManuale(true); 
         }
     }, 1000);
 }
@@ -349,7 +356,10 @@ window.scambiaCarte = function() {
     let p = rPlayers.find(pl => pl.id === mioId);
     p.cards.splice(0, 3); 
     rTruppeDaPiazzare += 8; 
-    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('cassa'); }catch(e){}
+    
+    // 🔥 SUONO COMBO 🔥
+    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('combo'); }catch(e){}
+    
     document.getElementById("risiko-carte-count").innerText = p.cards.length;
     document.getElementById("risiko-truppe-disp").innerText = rTruppeDaPiazzare;
     chiudiCarteRisiko();
@@ -467,9 +477,8 @@ function impostaFaseRisiko(fase) {
     
     if(btn2) btn2.onclick = () => passaFaseManuale(false);
 
-    // 🔥 IL TIMER PARTE E SI AZZERA SOLO ALL'INIZIO DEL TURNO (FASE 0) 🔥
     if (fase === 0) {
-        avviaTimerRisiko();
+        avviaTimerRisiko(); 
     }
 
     if(fase === 0) {
@@ -500,7 +509,10 @@ window.clickNodoRisiko = function(id) {
     if (rFase === 0) {
         if (n.owner === p.id && rTruppeDaPiazzare > 0) {
             n.troops++; rTruppeDaPiazzare--;
-            if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('cassa'); }catch(e){}
+            
+            // 🔥 SUONO PIAZZAMENTO TRUPPE 🔥
+            if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('truppa'); }catch(e){}
+            
             aggiornaMappaRisiko();
             syncRisikoNetwork("piazza_truppa");
             
@@ -525,7 +537,10 @@ window.clickNodoRisiko = function(id) {
                     rNodeSelected = null; aggiornaMappaRisiko(); let b = document.getElementById("btn-risiko-azione1"); if(b) b.innerText = "DA DOVE SPOSTARE?";
                 } else if (R_NODES[rNodeSelected].links.includes(id)) {
                     R_NODES[rNodeSelected].troops--; n.troops++;
-                    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('dadi'); }catch(e){} 
+                    
+                    // 🔥 SUONO SPOSTAMENTO MARCIA 🔥
+                    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('marcia'); }catch(e){} 
+                    
                     aggiornaMappaRisiko();
                     syncRisikoNetwork("sposta_truppa");
                     if(R_NODES[rNodeSelected].troops === 1) { rNodeSelected = null; aggiornaMappaRisiko(); let b = document.getElementById("btn-risiko-azione1"); if(b) b.innerText = "DA DOVE SPOSTARE?"; }
@@ -575,6 +590,7 @@ function eseguiAnimazioneBattaglia(attId, defId, resAtt, resDef, isAttaccante) {
     if(attBox) attBox.innerHTML = ""; 
     if(defBox) defBox.innerHTML = "";
     
+    // Suono Dadi normale durante la battaglia
     if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('dadi'); }catch(e){}
     
     let rollCount = 0; let numDadiAtt = resAtt.length; let numDadiDef = resDef.length;
@@ -598,7 +614,10 @@ function eseguiAnimazioneBattaglia(attId, defId, resAtt, resDef, isAttaccante) {
                 if (nDef.troops <= 0) {
                     nDef.owner = nAtt.owner; nDef.troops = numDadiAtt - armatePerseAtt; nAtt.troops -= (numDadiAtt - armatePerseAtt);
                     if(resText) resText.innerHTML = "<span style='color:#44ff44;'>🎯 TERRITORIO CONQUISTATO!</span>";
-                    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('vittoria'); }catch(e){}
+                    
+                    // 🔥 SUONO ESPLOSIONE / CONQUISTA 🔥
+                    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('conquista'); }catch(e){}
+                    
                     rNodeSelected = null; haConquistatoTerritorio = true; 
                 } else {
                     if(resText) resText.innerHTML = `${nomeAttaccante} perde ${armatePerseAtt} 🛵<br>${nomeDifensore} perde ${armatePerseDef} 🛵`;
@@ -608,6 +627,8 @@ function eseguiAnimazioneBattaglia(attId, defId, resAtt, resDef, isAttaccante) {
             } else {
                 if (nDef.troops - armatePerseDef <= 0) {
                     if(resText) resText.innerHTML = "<span style='color:#44ff44;'>🎯 TERRITORIO CONQUISTATO!</span>";
+                    // Spettatori sentono l'esplosione!
+                    if(typeof window.suonaEffetto === 'function') try{ window.suonaEffetto('conquista'); }catch(e){}
                 } else {
                     if(resText) resText.innerHTML = `${nomeAttaccante} perde ${armatePerseAtt} 🛵<br>${nomeDifensore} perde ${armatePerseDef} 🛵`;
                 }
